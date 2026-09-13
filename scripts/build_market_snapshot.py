@@ -11,10 +11,12 @@ reads DL_DIR the same way the source research pipeline did:
     {strike}{CE|PE}_{expiry}.csv          1-min option bars
 
 No bid/ask in this data -- only OHLCV + OI on the traded price -- so the
-"liquidity" panel uses volume/OI as a proxy, not a real quoted spread, and
-"parity residual" uses the traded CE/PE close, not a mid.
+"liquidity" flag is a volume threshold on that single traded minute, not a
+real quoted spread, and the parity check uses the traded CE/PE close, not
+a mid.
 """
 import json
+import math
 import re
 import sys
 import zipfile
@@ -23,7 +25,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from bs_solver import price as bs_price, implied_vol, delta, gamma, vega
+from bs_solver import price as bs_price, implied_vol, delta, gamma, vega, theta
 
 DL_DIR = Path("/Users/ramasamysadacharam/Desktop/nifty options data")
 OUT = Path(__file__).resolve().parents[1] / "web" / "data" / "market_snapshot.json"
@@ -33,6 +35,8 @@ RF = 0.065
 
 SNAPSHOT_DATE = "2025-06-02"          # a representative mid-sample Monday
 N_EXPIRIES = 4                        # nearest N weekly expiries live that day
+LIQUID_MIN_VOLUME = 50                # contracts traded in that single 1-min bar
+PARITY_TOL_PTS = 15.0                 # |residual| beyond this is flagged, not "arbitrage"
 
 
 def read_spot_close_at(zf, date, time_):
@@ -98,27 +102,37 @@ def main():
             d = delta(S, strike, T, iv, cp, RF)
             g = gamma(S, strike, T, iv, RF)
             v = vega(S, strike, T, iv, RF)
+            th = theta(S, strike, T, iv, cp, RF)
             rows.append({
                 "strike": strike, "cp": cp, "close": q["close"], "volume": q["volume"],
                 "moneyness": round(strike / S, 4), "iv": round(iv, 4),
                 "delta": round(d, 4), "gamma": round(g, 6), "vega": round(v, 3),
+                "theta_per_day": round(th / 365.0, 3),
+                "liquid": q["volume"] >= LIQUID_MIN_VOLUME,
             })
         rows.sort(key=lambda r: (r["strike"], r["cp"]))
 
-        # parity residual per strike where both CE and PE traded: (C - P) vs S - K*e^-rT
+        # Put-call parity, discounted-strike form: C - P + K*e^-rT - S should
+        # be ~0 for a genuine European pair. Flagging a large residual as
+        # "likely stale/illiquid/asynchronous", never as an arbitrage signal --
+        # these are two separate last-traded prints, not a simultaneous quote.
         by_strike = {}
         for r in rows:
             by_strike.setdefault(r["strike"], {})[r["cp"]] = r
         parity = []
         for k, legs in by_strike.items():
             if "CE" in legs and "PE" in legs:
-                synth_fwd = legs["CE"]["close"] - legs["PE"]["close"] + k
-                theoretical_fwd = S  # r*T small at these tenors; residual absorbs financing + any mispricing
+                residual = (legs["CE"]["close"] - legs["PE"]["close"]
+                            + k * math.exp(-RF * T) - S)
                 parity.append({
-                    "strike": k,
-                    "residual": round(synth_fwd - theoretical_fwd, 2),
+                    "strike": k, "residual": round(residual, 2),
                     "ce_vol": legs["CE"]["volume"], "pe_vol": legs["PE"]["volume"],
+                    "valid": abs(residual) <= PARITY_TOL_PTS,
                 })
+
+        parity_by_strike = {p["strike"]: p["valid"] for p in parity}
+        for r in rows:
+            r["parity_valid"] = parity_by_strike.get(r["strike"])  # None = other leg didn't trade
 
         atm_row = min(rows, key=lambda r: abs(r["strike"] - S)) if rows else None
         atm_ce = nearest_by_delta(rows, 0.5, "CE")
@@ -133,10 +147,11 @@ def main():
             "expiry": e, "dte_days": dte_days, "spot": S,
             "atm_iv": atm_iv,
             "skew_25d": round(d25p["iv"] - d25c["iv"], 4) if (d25p and d25c) else None,
+            "contracts_total": len(chain), "contracts_retained": len(rows),
             "rows": rows,
             "parity": sorted(parity, key=lambda r: r["strike"]),
         })
-        print(f"  {e}: dte={dte_days}d  spot={S}  strikes_priced={len(rows)}  atm_iv={atm_iv}")
+        print(f"  {e}: dte={dte_days}d  spot={S}  strikes_priced={len(rows)}/{len(chain)}  atm_iv={atm_iv}")
 
     payload = {
         "snapshot_date": SNAPSHOT_DATE, "entry_time": ENTRY_TIME, "risk_free": RF,

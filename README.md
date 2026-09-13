@@ -36,9 +36,11 @@ used by the web page -- see `tests/`.
   own error bound. Requires `node` on PATH.
 - `scripts/build_market_snapshot.py` -- one-off data-prep script. Pulls a
   real trading day's option chain across several live expiries out of the
-  raw Zerodha weekly archives, prices every strike with `bs_solver`, and
-  writes `web/data/market_snapshot.json`. Needs `DL_DIR` pointing at a
-  local copy of the archives to re-run; not needed just to use the solver.
+  raw Zerodha weekly archives, prices every strike (including theta) with
+  `bs_solver`, computes the discounted-strike put-call parity residual and
+  a liquidity/parity-validity flag per contract, and writes
+  `web/data/market_snapshot.json`. Needs `DL_DIR` pointing at a local copy
+  of the archives to re-run; not needed just to use the solver.
 - `scripts/build_snapshot_series.py` -- pulls the *same* strike's real
   price at a fixed intraday time across several consecutive real trading
   days (one option contract's own CSV spans about three weeks), and writes
@@ -83,16 +85,29 @@ and re-run with `DL_DIR` set to your local copy of the archives.
 - **Solver Explorer** tab: purely synthetic. You pick the axes and fixed
   parameters; every surface is the closed-form solver evaluated on a grid.
 - **Real NIFTY Snapshot** tab: real 1-minute option prices from one
-  session (see the date in the page header), IV backed out per strike,
-  Greeks computed from that IV. The dataset has OHLCV + open interest but
-  **no bid/ask**, so:
-  - the "liquidity" panel uses traded volume as a proxy, not a real quoted spread;
-  - the parity residual uses the traded CE/PE close, not a mid-price, so
-    some of its drift is discretization noise, not real mispricing.
-  - only 4 expiries were live that day, so the IV-by-expiry view is a
-    heatmap (moneyness x expiry) rather than a continuous 3D surface --
-    a fine mesh across 4 discrete expiries would just be interpolation
-    dressed up as resolution the data doesn't have.
+  session (see the snapshot strip at the top of the page), IV backed out
+  per strike, Greeks computed from that IV. The dataset has OHLCV + open
+  interest but **no bid/ask** -- every number is a last-traded print, not
+  a live quote -- so:
+  - a "Liquid only" filter (volume &ge; 50 lots that minute) and a
+    "Parity-valid only" filter (put-call parity residual within &plusmn;15
+    points) are both available from the Quotes selector, and the snapshot
+    strip always shows contracts retained vs. total for the current filter;
+  - the put-call parity check uses the discounted-strike form
+    (`C - P + K*e^-rT - S`) against the traded CE/PE close, not a mid, so a
+    large residual is flagged as a likely stale/asynchronous print, never
+    as a live arbitrage -- and in this dataset, essentially every strike
+    pair exceeds the tolerance (median residual 17-33 points across the
+    four expiries), which is the expected result of checking parity with
+    no bid/ask, not a broken filter;
+  - the traded-volume panel is one minute's own interval volume, not a
+    cumulative session total, and puts are mirrored below zero purely as a
+    comparison device, labelled as such;
+  - only 4 expiries were live that day, so the IV surface is a heatmap
+    (moneyness x expiry) rather than a continuous 3D surface, and cells
+    outside the moneyness range that expiry actually traded are left as
+    missing (rendered as the plot background) rather than extrapolated and
+    shown as if they were observed.
 - Both tabs use `RF = 0.065` as the risk-free rate; the market snapshot
   doesn't account for dividends/carry, and treats Black-Scholes as an
   implied-vol quoting convention rather than a literal pricing claim --

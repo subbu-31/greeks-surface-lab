@@ -150,23 +150,54 @@
   .credit{ padding:10px 26px 16px; font-size:11px; color:var(--text-faint); display:flex; gap:14px; flex-wrap:wrap; }
 
   /* -------- market view -------- */
-  .market{ padding:20px 26px 40px; display:flex; flex-direction:column; gap:20px; }
-  .market-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+  .market{ padding:20px 26px 40px; display:flex; flex-direction:column; gap:16px; }
+  .market-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap; }
   .market-head h2{ font-size:19px; font-weight:500; margin:0 0 4px; }
   .market-head p{ margin:0; font-size:12.5px; color:var(--text-dim); max-width:60ch; line-height:1.5; }
-  .expiry-picker{ display:flex; gap:6px; flex-wrap:wrap; }
+  .market-controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); }
+  select.select{
+    appearance:none; -webkit-appearance:none; background:var(--surface-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6"><path d="M0 0l5 6 5-6z" fill="%238b93a3"/></svg>') no-repeat right 10px center;
+    border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12.5px; font-weight:500;
+    padding:8px 30px 8px 12px; border-radius:8px; cursor:pointer; min-width:170px; max-width:260px;
+  }
+  select.select:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .snapshot-strip{
+    display:grid; grid-auto-flow:column; grid-auto-columns:1fr;
+    gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden;
+  }
+  @media (max-width: 900px){ .snapshot-strip{ grid-auto-flow:row; grid-auto-columns:unset; } }
+  .snapshot-strip .stat{ background:var(--surface); padding:11px 16px; display:flex; flex-direction:column; gap:3px; }
+  .snapshot-strip .stat .k{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); }
+  .snapshot-strip .stat .v{ font-size:14.5px; font-weight:600; }
+
   .card{ background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
-  .card-head{ padding:14px 18px 4px; display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .card-head{ padding:14px 18px 4px; display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; }
   .card-head h3{ font-size:14px; font-weight:600; margin:0; font-family:"Archivo",sans-serif; }
   .card-head .hint{ font-size:11px; color:var(--text-faint); }
+  .card-toggle{ display:flex; gap:4px; padding:0 18px; }
+  .card-toggle button{
+    appearance:none; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim);
+    font-family:inherit; font-size:11px; font-weight:500; padding:5px 10px; border-radius:6px; cursor:pointer;
+  }
+  .card-toggle button.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   .card-body{ padding:6px 12px 14px; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
   @media (max-width: 980px){ .grid2, .grid3{ grid-template-columns:1fr; } }
   .chart{ width:100%; height:300px; }
   .chart.tall{ height:420px; }
+  .chart.small{ height:150px; }
+  .smallmult{ display:flex; flex-direction:column; gap:2px; }
+  .smallmult-row{ display:flex; align-items:center; gap:10px; }
+  .smallmult-row .rowlabel{ width:52px; flex:none; font-size:11px; color:var(--text-dim); text-align:right; padding-right:4px; }
+  .smallmult-row .chart{ flex:1; min-width:0; }
   .loading{ color:var(--text-faint); font-size:12.5px; padding:40px; text-align:center; }
   .legend-note{ font-size:11px; color:var(--text-faint); padding:0 18px 12px; line-height:1.5; }
+  .quality-summary{ display:flex; gap:16px; flex-wrap:wrap; padding:0 18px 8px; font-size:11.5px; color:var(--text-dim); }
+  .quality-summary b{ color:var(--text); font-family:"IBM Plex Mono",monospace; }
 </style>
 </head>
 <body>
@@ -239,40 +270,75 @@
         <h2>NIFTY option chain, real 1-minute data</h2>
         <p id="snapshotSub">Loading &hellip;</p>
       </div>
-      <div class="expiry-picker" id="expiryPicker"></div>
+      <div class="market-controls">
+        <div class="field">
+          <label for="expirySelect">Expiry</label>
+          <select class="select" id="expirySelect"></select>
+        </div>
+        <div class="field">
+          <label for="qualitySelect">Quotes</label>
+          <select class="select" id="qualitySelect">
+            <option value="all">All quotes</option>
+            <option value="liquid">Liquid only (&ge;50 lots that minute)</option>
+            <option value="parity">Parity-valid only</option>
+          </select>
+        </div>
+      </div>
     </div>
+
+    <div class="snapshot-strip" id="snapshotStrip"></div>
+    <div class="legend-note" style="padding:0;">No bid/ask in this dataset -- every price below is the last traded print at 09:45 IST, not a live quote. Treat single-print premiums as indicative, not executable.</div>
 
     <div class="grid2">
       <div class="card">
-        <div class="card-head"><h3>IV smile</h3><span class="hint">selected expiry, by strike</span></div>
+        <div class="card-head">
+          <div><h3>IV smile</h3><span class="hint">Call and put IV by strike, selected expiry</span></div>
+        </div>
+        <div class="card-toggle" id="smileToggle">
+          <button class="active" data-mode="side">Call / Put</button>
+          <button data-mode="otm">OTM composite</button>
+        </div>
         <div class="card-body"><div class="chart" id="chartSmile"></div></div>
+        <div class="legend-note">"OTM composite" joins put IV below spot to call IV above spot -- the standard way to read a single smile line without picking arbitrarily between two IVs quoted at the same strike.</div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Term structure &amp; skew</h3><span class="hint">ATM IV and 25&Delta; skew across expiries</span></div>
-        <div class="card-body"><div class="chart" id="chartTerm"></div></div>
+        <div class="card-head"><h3>Term structure &amp; skew</h3><span class="hint">ATM IV and 25&Delta; skew across expiries, aligned panels</span></div>
+        <div class="card-body"><div class="chart tall" id="chartTerm"></div></div>
+        <div class="legend-note">Two separate panels, not a shared axis -- ATM IV and skew are different quantities and overlaying them on one scale invites reading a coincidence as a relationship.</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-head"><h3>Implied-vol surface</h3><span class="hint">moneyness (K/S) &times; expiry, OTM-side smile per expiry</span></div>
+      <div class="card-head"><h3>Implied-volatility surface</h3><span class="hint">Moneyness (K/S) &times; expiry, OTM-composite smile per expiry</span></div>
       <div class="card-body"><div class="chart tall" id="chartIVSurface"></div></div>
+      <div class="legend-note">Grey cells are outside the moneyness range this expiry actually traded -- shown as missing, not extrapolated as if they were observed. Only 4 expiries were live, so this is a heatmap over discrete rows, not a continuous 3D surface a mesh would falsely imply.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>Greeks by strike</h3><span class="hint">Selected expiry &middot; calls and puts as separate series</span></div>
+      <div class="card-body">
+        <div class="smallmult">
+          <div class="smallmult-row"><span class="rowlabel">Delta</span><div class="chart small" id="chartDelta"></div></div>
+          <div class="smallmult-row"><span class="rowlabel">Gamma</span><div class="chart small" id="chartGamma"></div></div>
+          <div class="smallmult-row"><span class="rowlabel">Vega</span><div class="chart small" id="chartVega"></div></div>
+          <div class="smallmult-row"><span class="rowlabel">Theta</span><div class="chart small" id="chartTheta"></div></div>
+        </div>
+      </div>
+      <div class="legend-note">Delta &amp; Gamma per &#8377;1 NIFTY move &middot; Vega per 1 volatility point &middot; Theta per calendar day. Calls and puts are drawn as separate lines -- connecting them into one series across a strike produces a sawtooth jump at the money that isn't a real feature of either Greek.</div>
     </div>
 
     <div class="grid2">
       <div class="card">
-        <div class="card-head"><h3>Greeks by strike</h3><span class="hint">selected expiry &middot; delta / gamma / vega</span></div>
-        <div class="card-body"><div class="chart" id="chartGreeks"></div></div>
+        <div class="card-head"><h3>Put-call parity</h3><span class="hint">C &minus; P + K&middot;e<sup>&minus;rT</sup> &minus; S, by strike</span></div>
+        <div class="quality-summary" id="paritySummary"></div>
+        <div class="card-body"><div class="chart" id="chartParity"></div></div>
+        <div class="legend-note">A large residual reads as a stale, illiquid, or asynchronous print -- one leg's last trade may be minutes away from the other's -- never as a live arbitrage, since neither price is a firm quote. In this dataset almost every strike pair exceeds the &plusmn;15 pt tolerance: with no bid/ask and two independent last-traded prints, that is the expected result, not a broken filter -- it's the reason "Parity-valid only" above will show few or no contracts for most expiries.</div>
       </div>
       <div class="card">
-        <div class="card-head"><h3>Put-call parity residual</h3><span class="hint">(C &minus; P + K) &minus; spot, by strike</span></div>
-        <div class="card-body"><div class="chart" id="chartParity"></div></div>
-        <div class="legend-note">Residual should hover near zero; drift at the wings usually means one leg is stale or thinly traded rather than a real arbitrage -- this data has no bid/ask, so volume is the only quality check available (see below).</div>
+        <div class="card-head"><h3>Traded volume by strike</h3><span class="hint">Contracts traded per minute (puts mirrored)</span></div>
+        <div class="card-body"><div class="chart" id="chartVolume"></div></div>
+        <div class="legend-note">Put bars are mirrored below zero purely to compare call vs. put activity at a glance -- they are not negative volume. This is the single 09:45 minute bar's own traded volume, not a cumulative session total, and there is no bid/ask in this dataset to check it against a real spread.</div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h3>Traded volume by strike</h3><span class="hint">selected expiry &middot; liquidity proxy (no bid/ask in this dataset)</span></div>
-      <div class="card-body"><div class="chart" id="chartVolume"></div></div>
     </div>
   </div>
 </div>
