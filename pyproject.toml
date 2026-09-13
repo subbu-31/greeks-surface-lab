@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "greeks-surface-lab"
+version = "0.1.0"
+description = "A standalone Black-Scholes solver and Greek-based P&L attribution engine, stdlib only."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+# Only needed to rebuild web/data/*.json from raw option archives
+# (scripts/build_market_snapshot.py, scripts/build_snapshot_series.py).
+snapshot-tools = ["pandas>=1.5"]
+
+[tool.setuptools.packages.find]
+include = ["bs_solver*"]
