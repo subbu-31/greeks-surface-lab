@@ -9,9 +9,12 @@ cp is "CE" for a call, "PE" for a put -- kept from the source project's
 convention (Zerodha's own naming for call/put option instruments).
 """
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 
-RF = 0.065   # default risk-free rate
+RF = 0.065   # default risk-free rate -- matches India's RBI repo rate Feb 2023 to Feb 2025,
+             # NOT after: 6.25% from 2025-02-07, 6.00% from 2025-04-09, 5.50% from 2025-06-06
+             # (confirmed against RBI/PIB press releases). Always pass r explicitly for a date
+             # after 2025-02-07 -- this default is a fallback for the un-cut period, not "today".
 YEAR = 365.0
 
 
@@ -113,6 +116,39 @@ def rho(S, K, T, sigma, cp, r=RF):
     if cp == "CE":
         return K * T * math.exp(-r * T) * _nd(d2)
     return -K * T * math.exp(-r * T) * _nd(-d2)
+
+
+def vanna(S, K, T, sigma, r=RF):
+    """d(delta)/d(sigma), equivalently d(vega)/dS. Same for calls and puts
+    (delta_put = delta_call - 1, a constant shift that vanishes on
+    differentiation). Verified against a finite difference of delta() --
+    see tests/test_greeks_finite_diff.py.
+    """
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1, d2 = _d1_d2(S, K, T, sigma, r)
+    return -_npdf(d1) * d2 / sigma
+
+
+def charm(S, K, T, sigma, cp, r=RF):
+    """d(delta)/d(time elapsed) -- matches theta()'s sign convention (decay
+    per unit of calendar time passing, not per unit of time-to-expiry).
+    Same value for calls and puts, same reasoning as vanna(). cp is accepted
+    for interface symmetry with the other Greeks but doesn't change the
+    result.
+    """
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1, d2 = _d1_d2(S, K, T, sigma, r)
+    return -_npdf(d1) * (2 * r * T - d2 * sigma * math.sqrt(T)) / (2 * T * sigma * math.sqrt(T))
+
+
+def volga(S, K, T, sigma, r=RF):
+    """d(vega)/d(sigma), a.k.a. vomma. Same for calls and puts."""
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1, d2 = _d1_d2(S, K, T, sigma, r)
+    return vega(S, K, T, sigma, r) * d1 * d2 / sigma
 
 
 def years_to_expiry(entry_ts, expiry_date, expiry_hour=15, expiry_minute=30):

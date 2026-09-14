@@ -25,13 +25,21 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from bs_solver import price as bs_price, implied_vol, delta, gamma, vega, theta
+from bs_solver import implied_vol, delta, gamma, vega, theta
 
 DL_DIR = Path("/Users/ramasamysadacharam/Desktop/nifty options data")
 OUT = Path(__file__).resolve().parents[1] / "web" / "data" / "market_snapshot.json"
 LEG_RE = re.compile(r"^(\d+)(CE|PE)_(\d{8})\.csv$")
 ENTRY_TIME = "09:45:00"
-RF = 0.065
+
+# Was 0.065, unchecked. The RBI's MPC cut the repo rate to 6.00% "with
+# immediate effect" on 2025-04-09 (PIB press release) and held it there
+# until the next cut, to 5.50%, on 2025-06-06 (RBI press release, MPC
+# meeting June 4-6). SNAPSHOT_DATE below (2025-06-02) falls inside that
+# window, so the correct rate is 6.00%, not 6.50% -- confirmed against
+# both RBI/PIB primary sources, not assumed from the same flat default
+# used elsewhere in this project.
+RF = 0.060
 
 SNAPSHOT_DATE = "2025-06-02"          # a representative mid-sample Monday
 N_EXPIRIES = 4                        # nearest N weekly expiries live that day
@@ -134,7 +142,6 @@ def main():
         for r in rows:
             r["parity_valid"] = parity_by_strike.get(r["strike"])  # None = other leg didn't trade
 
-        atm_row = min(rows, key=lambda r: abs(r["strike"] - S)) if rows else None
         atm_ce = nearest_by_delta(rows, 0.5, "CE")
         atm_pe = nearest_by_delta(rows, 0.5, "PE")
         atm_iv = None

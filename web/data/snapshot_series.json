@@ -1,21 +1,102 @@
 {
  "expiry": "20250109",
- "atm_strike": 23950,
+ "strikes": {
+  "atm": 23950,
+  "short_call": 24100,
+  "short_put": 23800,
+  "long_call": 24250,
+  "long_put": 23650
+ },
  "risk_free": 0.065,
  "entry_time": "09:45:00",
+ "liquid_min_volume": 50,
  "samples": [
+  {
+   "date": "2024-12-26",
+   "time": "09:45:00",
+   "spot": 23802.75,
+   "dte_days": 14.24,
+   "legs": {
+    "atm_ce": {
+     "close": 217.7,
+     "iv": 0.1377,
+     "volume": 375,
+     "liquid": true
+    },
+    "atm_pe": {
+     "close": 262.25,
+     "iv": 0.1151,
+     "volume": 75,
+     "liquid": true
+    },
+    "short_call": {
+     "close": 144.45,
+     "iv": 0.1298,
+     "volume": 225,
+     "liquid": true
+    },
+    "short_put": {
+     "close": 195.6,
+     "iv": 0.1205,
+     "volume": 10575,
+     "liquid": true
+    },
+    "long_call": {
+     "close": 99.2,
+     "iv": 0.1298,
+     "volume": 1875,
+     "liquid": true
+    },
+    "long_put": {
+     "close": 138.15,
+     "iv": 0.1226,
+     "volume": 75,
+     "liquid": true
+    }
+   }
+  },
   {
    "date": "2024-12-27",
    "time": "09:45:00",
    "spot": 23870.25,
    "dte_days": 13.24,
-   "ce": {
-    "close": 240.1,
-    "iv": 0.1387
-   },
-   "pe": {
-    "close": 242.55,
-    "iv": 0.1271
+   "legs": {
+    "atm_ce": {
+     "close": 240.1,
+     "iv": 0.1387,
+     "volume": 2100,
+     "liquid": true
+    },
+    "atm_pe": {
+     "close": 242.55,
+     "iv": 0.1271,
+     "volume": 3225,
+     "liquid": true
+    },
+    "short_call": {
+     "close": 164.95,
+     "iv": 0.1328,
+     "volume": 8175,
+     "liquid": true
+    },
+    "short_put": {
+     "close": 179.95,
+     "iv": 0.1315,
+     "volume": 15975,
+     "liquid": true
+    },
+    "long_call": {
+     "close": 108.2,
+     "iv": 0.1288,
+     "volume": 3675,
+     "liquid": true
+    },
+    "long_put": {
+     "close": 130.65,
+     "iv": 0.1354,
+     "volume": 2025,
+     "liquid": true
+    }
    }
   },
   {
@@ -23,13 +104,43 @@
    "time": "09:45:00",
    "spot": 23731.1,
    "dte_days": 10.24,
-   "ce": {
-    "close": 133.35,
-    "iv": 0.1316
-   },
-   "pe": {
-    "close": 287.8,
-    "iv": 0.1177
+   "legs": {
+    "atm_ce": {
+     "close": 133.35,
+     "iv": 0.1316,
+     "volume": 3225,
+     "liquid": true
+    },
+    "atm_pe": {
+     "close": 287.8,
+     "iv": 0.1177,
+     "volume": 75,
+     "liquid": true
+    },
+    "short_call": {
+     "close": 81.0,
+     "iv": 0.1275,
+     "volume": 9000,
+     "liquid": true
+    },
+    "short_put": {
+     "close": 210.9,
+     "iv": 0.1247,
+     "volume": 17850,
+     "liquid": true
+    },
+    "long_call": {
+     "close": 46.7,
+     "iv": 0.1254,
+     "volume": 3225,
+     "liquid": true
+    },
+    "long_put": {
+     "close": 148.6,
+     "iv": 0.1295,
+     "volume": 1350,
+     "liquid": true
+    }
    }
   },
   {
@@ -37,13 +148,43 @@
    "time": "09:45:00",
    "spot": 23519.3,
    "dte_days": 9.24,
-   "ce": {
-    "close": 78.6,
-    "iv": 0.1471
-   },
-   "pe": {
-    "close": 451.9,
-    "iv": 0.1313
+   "legs": {
+    "atm_ce": {
+     "close": 78.6,
+     "iv": 0.1471,
+     "volume": 2775,
+     "liquid": true
+    },
+    "atm_pe": {
+     "close": 451.9,
+     "iv": 0.1313,
+     "volume": 75,
+     "liquid": true
+    },
+    "short_call": {
+     "close": 48.35,
+     "iv": 0.1465,
+     "volume": 10350,
+     "liquid": true
+    },
+    "short_put": {
+     "close": 346.0,
+     "iv": 0.1351,
+     "volume": 11175,
+     "liquid": true
+    },
+    "long_call": {
+     "close": 28.3,
+     "iv": 0.1461,
+     "volume": 2175,
+     "liquid": true
+    },
+    "long_put": {
+     "close": 258.55,
+     "iv": 0.14,
+     "volume": 3000,
+     "liquid": true
+    }
    }
   },
   {
@@ -51,27 +192,43 @@
    "time": "09:45:00",
    "spot": 23595.15,
    "dte_days": 8.24,
-   "ce": {
-    "close": 103.0,
-    "iv": 0.1602
-   },
-   "pe": {
-    "close": 404.35,
-    "iv": 0.1449
-   }
-  },
-  {
-   "date": "2025-01-02",
-   "time": "09:45:00",
-   "spot": 23827.8,
-   "dte_days": 7.24,
-   "ce": {
-    "close": 182.55,
-    "iv": 0.168
-   },
-   "pe": {
-    "close": 274.5,
-    "iv": 0.1684
+   "legs": {
+    "atm_ce": {
+     "close": 103.0,
+     "iv": 0.1602,
+     "volume": 7800,
+     "liquid": true
+    },
+    "atm_pe": {
+     "close": 404.35,
+     "iv": 0.1449,
+     "volume": 225,
+     "liquid": true
+    },
+    "short_call": {
+     "close": 63.0,
+     "iv": 0.1565,
+     "volume": 7575,
+     "liquid": true
+    },
+    "short_put": {
+     "close": 308.5,
+     "iv": 0.1499,
+     "volume": 8325,
+     "liquid": true
+    },
+    "long_call": {
+     "close": 37.0,
+     "iv": 0.1547,
+     "volume": 2025,
+     "liquid": true
+    },
+    "long_put": {
+     "close": 231.35,
+     "iv": 0.1563,
+     "volume": 15450,
+     "liquid": true
+    }
    }
   }
  ]
