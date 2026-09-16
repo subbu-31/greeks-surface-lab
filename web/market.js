@@ -27,18 +27,49 @@
 
   var DATA = null;
   var selectedExpiry = null;
+  var selectedHour = null;
   var smileMode = "side";     // "side" | "otm"
   var qualityMode = "all";    // "all" | "liquid" | "parity"
 
+  // Bumped on every loadSession() call so a fetch that resolves out of order
+  // (e.g. the initial default-session fetch landing after a subsequent manual
+  // switch) can recognize it's stale and get dropped instead of clobbering
+  // whatever session the user has since selected.
+  var loadSeq = 0;
+
+  var MARKET_CONTROL_IDS = ["sessionSelect", "hourSelect", "expirySelect", "qualitySelect"];
+
+  // Opening index.html directly (file://) makes every fetch() below throw --
+  // that's a browser security rule, not a bug in this app -- and the failure
+  // would otherwise show up as confusingly as "the dropdowns don't update"
+  // (each control still looks interactive; nothing ever repopulates it).
+  // Caught once, up front, before any fetch is attempted, so it reads as a
+  // loud, specific instruction instead of a silent stall.
+  if(location.protocol === "file:"){
+    document.getElementById("snapshotSub").innerHTML =
+      "<strong>This page needs to be served over HTTP, not opened as a file.</strong> " +
+      "Run <code>python3 -m http.server 8000</code> from <code>web/</code> and open " +
+      "<code>http://localhost:8000</code> instead -- browsers block a page's own fetch() " +
+      "requests when it's loaded via file://, so Session/Hour/Expiry below have no data to show.";
+    MARKET_CONTROL_IDS.forEach(function(id){ document.getElementById(id).disabled = true; });
+  } else {
+    loadSession(document.getElementById("sessionSelect").value);
+  }
+
   function loadSession(path){
+    var seq = ++loadSeq;
     document.getElementById("snapshotSub").textContent = "Loading …";
     fetch(path)
       .then(function(r){
         if(!r.ok) throw new Error("http " + r.status);
         return r.json();
       })
-      .then(function(json){ DATA = json; boot(); })
+      .then(function(json){
+        if(seq !== loadSeq) return; // a newer session load has since started
+        DATA = json; boot();
+      })
       .catch(function(err){
+        if(seq !== loadSeq) return;
         document.getElementById("snapshotSub").textContent =
           "Couldn't load " + path + " (" + err.message + "). " +
           "Serve this folder over HTTP (e.g. `python3 -m http.server` from web/) rather than opening index.html directly -- " +
@@ -61,23 +92,46 @@
     btn.classList.add("active");
     renderSmile(findExpiry(selectedExpiry));
   });
+  document.getElementById("hourSelect").addEventListener("change", function(e){
+    selectedHour = e.target.value;
+    onHourChange();
+  });
 
-  loadSession(document.getElementById("sessionSelect").value);
+  function currentExpiries(){ return DATA.by_time[selectedHour].expiries; }
 
   function boot(){
-    selectedExpiry = DATA.expiries[0].expiry;
+    selectedHour = DATA.checkpoints[0];
+
+    var hourSel = document.getElementById("hourSelect");
+    hourSel.innerHTML = "";
+    DATA.checkpoints.forEach(function(t){
+      var o = document.createElement("option");
+      o.value = t;
+      o.textContent = t.slice(0,5) + " IST";
+      hourSel.appendChild(o);
+    });
+    hourSel.value = selectedHour;
+
+    selectedExpiry = currentExpiries()[0].expiry;
+    onHourChange();
+  }
+
+  function onHourChange(){
+    var exps = currentExpiries();
     document.getElementById("snapshotSub").textContent =
-      DATA.expiries.length + " live expiries pulled from the raw archives at " + SNAP_TS() + ".";
+      exps.length + " live expiries pulled from the raw archives at " + SNAP_TS() + ".";
 
     var sel = document.getElementById("expirySelect");
+    var keep = exps.some(function(e){ return e.expiry === selectedExpiry; }) ? selectedExpiry : exps[0].expiry;
     sel.innerHTML = "";
-    DATA.expiries.forEach(function(exp){
+    exps.forEach(function(exp){
       var o = document.createElement("option");
       o.value = exp.expiry;
       o.textContent = fmtExpiry(exp.expiry) + "  (" + exp.dte_days + "d)";
       sel.appendChild(o);
     });
-    sel.value = selectedExpiry;
+    sel.value = keep;
+    selectedExpiry = keep;
     sel.onchange = function(){ selectedExpiry = sel.value; renderPerExpiry(); };
 
     renderTermAndSkew();
@@ -85,9 +139,9 @@
     renderPerExpiry();
   }
 
-  function SNAP_TS(){ return DATA.snapshot_date + " " + DATA.entry_time + " IST"; }
+  function SNAP_TS(){ return DATA.snapshot_date + " " + selectedHour + " IST"; }
   function fmtExpiry(e){ return e.slice(6,8)+"-"+e.slice(4,6)+"-"+e.slice(0,4); }
-  function findExpiry(e){ return DATA.expiries.filter(function(x){return x.expiry===e;})[0]; }
+  function findExpiry(e){ return currentExpiries().filter(function(x){return x.expiry===e;})[0]; }
   function fmtINR(n){ return "₹" + Math.round(n).toLocaleString("en-IN"); }
 
   function qualityLabel(r){
@@ -203,7 +257,7 @@
 
   function renderTermAndSkew(){
     var t = theme();
-    var exps = DATA.expiries.filter(function(e){return e.atm_iv!=null;});
+    var exps = currentExpiries().filter(function(e){return e.atm_iv!=null;});
     var dte = exps.map(function(e){return e.dte_days;});
     var atm = exps.map(function(e){return e.atm_iv*100;});
     var skew = exps.map(function(e){return e.skew_25d!=null ? e.skew_25d*100 : null;});
@@ -263,7 +317,7 @@
 
   function renderIVSurface(){
     var t = theme();
-    var exps = DATA.expiries.filter(function(e){ return e.rows.length > 3; })
+    var exps = currentExpiries().filter(function(e){ return e.rows.length > 3; })
       .slice().sort(function(a,b){ return a.dte_days - b.dte_days; });
 
     var mLo = 0.85, mHi = 1.15, nM = 30, maxGap = 0.03;

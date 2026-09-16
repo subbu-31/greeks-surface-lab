@@ -62,16 +62,23 @@ parity and an independent JS reimplementation used by the web page.
   constants, so it can build more than one session without copy-pasting
   the script (see "two sessions" below). Pulls a real trading day's option
   chain across several live expiries out of the raw Zerodha weekly
-  archives, prices every strike (including theta) with `bs_solver`,
-  computes the discounted-strike put-call parity residual and
-  a liquidity/parity-validity flag per contract, and writes
-  `web/data/market_snapshot.json` by default. Default date is 2024-12-27
-  -- the same real day `build_snapshot_series.py` starts from, so
-  `20250109` shows up as one of its four live expiries (see "unified"
-  below). `--date 2026-03-11 --out web/data/market_snapshot_2026.json`
-  builds the second, deliberately different sample in `web/data/` (see
-  "two sessions" below). Needs `DL_DIR` pointing at a local copy of the
-  archives to re-run; not needed just to use the solver.
+  archives, at **seven hourly checkpoints** from 09:15 to 15:15 IST, prices
+  every strike (including theta) with `bs_solver` at each checkpoint,
+  computes the discounted-strike put-call parity residual and a
+  liquidity/parity-validity flag per contract, and writes
+  `web/data/market_snapshot.json` by default -- one file holding the whole
+  day, keyed by checkpoint (`by_time["09:15:00"].expiries`, etc.), not one
+  file per hour. Each checkpoint is matched to the most recent real print
+  at or before it within a 3-minute staleness cap, not an exact-minute
+  match -- most strikes don't print in every single minute, and an
+  exact-match rule would starve every hour but the busiest one. Default
+  date is 2024-12-27 -- the same real day `build_snapshot_series.py`
+  starts from, so `20250109` shows up as one of its four live expiries
+  (see "unified" below). `--date 2026-03-11 --out
+  web/data/market_snapshot_2026.json` builds the second, deliberately
+  different sample in `web/data/` (see "two sessions" below). Needs
+  `DL_DIR` pointing at a local copy of the archives to re-run; not needed
+  just to use the solver.
 - `scripts/build_snapshot_series.py` -- pulls **six** real strikes (an ATM
   pair, an OTM call/put pair, and a further-OTM wing call/put pair) at a
   fixed intraday time across five consecutive real trading days (one
@@ -96,7 +103,12 @@ parity and an independent JS reimplementation used by the web page.
   `explorer.js` reimplements the same Black-Scholes formulas in JS (kept
   in sync with `black_scholes.py` by hand and checked by
   `tests/test_js_parity.py`, since a static page can't call Python at
-  runtime); `market.js` reads the prebuilt JSON.
+  runtime); `market.js` reads the prebuilt JSON and drives every chart on
+  the Real NIFTY Snapshot tab off three linked controls -- **Session**,
+  **Hour**, and **Expiry** -- so picking a different hour re-renders the
+  IV smile, term structure/skew, IV surface, per-strike Greeks, put-call
+  parity, and traded volume together, all against that hour's own real
+  prints, not a separate fixed-contract side panel.
 
 ## Installing
 
@@ -125,7 +137,9 @@ python3 -m http.server 8000 -d web        # serve the page (fetch() needs http:/
 ```
 Then open `http://localhost:8000` and use the **Session** selector on the
 Real NIFTY Snapshot tab to switch between the two prebuilt sessions (see
-"two sessions" below). CI (`.github/workflows/ci.yml`) runs `mypy` and
+"two sessions" below), and the **Hour** selector next to it to step through
+that session's own trading day -- every chart on the tab re-renders against
+the selected hour's real prints. CI (`.github/workflows/ci.yml`) runs `mypy` and
 `pytest` on every push, across Python 3.9-3.12.
 
 To rebuild the market snapshot against a different date, `DL_DIR=... python3
@@ -268,30 +282,98 @@ second -- picked up automatically, not hand-verified per session the way
 the original 0.060/2025-06-02 rate was), and the same in-browser check
 (no console errors, sensible smile/skew on both) before being trusted.
 
+Adding a second session surfaced a real bug in the switching code itself:
+`loadSession(path)`'s `fetch(...).then(...)` had no guard against two
+loads racing -- if an earlier session's fetch happened to resolve *after*
+a later one (plausible on the initial page-load fetch racing a fast
+manual switch, or under ordinary network jitter), its `.then()` would run
+last and silently overwrite the dropdown/charts with the wrong session's
+data while the selector itself still showed the session the user had
+actually chosen. Reproduced directly (firing the switch to 2026 then
+immediately back to 2024 exposed exactly this: selector said 2024, charts
+still showed 2026), then fixed with a monotonic sequence counter --
+each `loadSession()` call captures its own sequence number, and a
+response is applied only if no newer load has started since. Verified
+both directions, including the deliberately-raced case.
+
+## The hourly view started as a separate card, and that was the wrong shape
+
+The first attempt at showing intraday movement added a fixed-strike,
+fixed-expiry side panel (`scripts/build_intraday_series.py`) that revalued
+one ATM contract every hour, independent of the Session/Expiry/Quotes
+controls above it. That's a narrower question than the dashboard's other
+views answer -- it shows one contract's clock, not how the *chain* looks
+at a given hour -- and it meant "hourly" and "which strike/expiry" lived
+in two disconnected parts of the page. Replaced it with a single **Hour**
+selector wired into the same state the Session and Expiry selectors
+already drive: `build_market_snapshot.py` now prices the full chain at
+seven hourly checkpoints (09:15-15:15 IST) instead of one fixed 09:45
+cross-section, and every chart on the tab -- IV smile, term structure and
+skew, the IV surface, per-strike Greeks, put-call parity, traded volume --
+re-renders off whichever hour is selected. The old script and its narrower
+data file are gone; the checkpoint convention it introduced (hourly, real
+prints matched within a 3-minute staleness cap) is what the chain-wide
+version now uses too.
+
+One side effect worth being explicit about: exact-minute matching (the
+original `build_market_snapshot.py`) and nearest-prior-within-3-minutes
+matching (needed for checkpoints other than the one lucky minute a whole
+chain happened to trade in) aren't the same filter, so per-hour stats like
+the parity residual and contracts-retained count move around across the
+day -- e.g. the primary session's median |parity residual| ranges roughly
+8-31 points depending on which of the seven hours is selected, not one
+fixed number. That range itself is informative: it means the two
+mid-morning/early-afternoon hours checked so far are not meaningfully
+"more parity-valid" than the open or close, consistent with this dataset
+never having a firm quote to check parity against in the first place.
+
+## "Session and Expiry aren't reconciling" turned out to be file://, not the state machine
+
+A report that Session and Expiry looked out of sync sent this back through
+every combination the dashboard's state machine can reach: rapid session
+switches in both orders, a session switch while a non-default Hour and
+Expiry were active, cycling all seven hours under the "Parity-valid only"
+filter (including hours with zero valid pairs), and a full rerun of
+`build_market_snapshot.py` checked for determinism and for any checkpoint
+missing an expiry the others have. All of it reconciled correctly and
+`market.js`'s actual state -- `selectedHour`/`selectedExpiry` plus the
+`by_time` lookup -- was never the problem. The real cause: opening
+`index.html` directly (`file://...`) rather than through a local server.
+Browsers block a page's own `fetch()` requests over `file://`, so `DATA`
+never loads and the dropdowns never populate -- and because every control
+still *looks* interactive, the failure reads as "Session and Expiry don't
+agree" rather than "nothing loaded", which is what actually happened.
+`market.js` now checks `location.protocol` before attempting any fetch and
+disables Session/Hour/Expiry/Quotes with an explicit instruction ("serve
+this over HTTP") instead of leaving them in that ambiguous state -- see
+"Running it" above for the one-line server command.
+
 ## What's real and what isn't
 
 - **Solver Explorer** tab: purely synthetic. You pick the axes and fixed
   parameters; every surface is the closed-form solver evaluated on a grid.
 - **Real NIFTY Snapshot** tab: real 1-minute option prices from one
-  session (see the snapshot strip at the top of the page), IV backed out
-  per strike, Greeks computed from that IV. The dataset has OHLCV + open
+  session at the selected hour (see the snapshot strip at the top of the
+  page, and the **Hour** selector next to Session), IV backed out per
+  strike, Greeks computed from that IV. The dataset has OHLCV + open
   interest but **no bid/ask** -- every number is a last-traded print, not
   a live quote -- so:
-  - a "Liquid only" filter (volume &ge; 50 lots that minute) and a
+  - a "Liquid only" filter (volume &ge; 50 lots at the matched print) and a
     "Parity-valid only" filter (put-call parity residual within &plusmn;15
     points) are both available from the Quotes selector, and the snapshot
     strip always shows contracts retained vs. total for the current filter;
   - the put-call parity check uses the discounted-strike form
-    (`C - P + K*e^-rT - S`) against the traded CE/PE close, not a mid, so a
+    (`C - P + K*e^-rT - S`) against the matched CE/PE close, not a mid, so a
     large residual is flagged as a likely stale/asynchronous print, never
     as a live arbitrage -- and in this dataset, most strike pairs exceed
-    the tolerance (median residual 13-21 points across the four expiries,
-    worse the further out and thinner the expiry gets), which is the
+    the tolerance at every hour (median residual roughly 8-31 points across
+    the seven checkpoints in the primary session, not one fixed number --
+    see "the hourly view started as a separate card" above), which is the
     expected result of checking parity with no bid/ask, not a broken
     filter;
-  - the traded-volume panel is one minute's own interval volume, not a
-    cumulative session total, and puts are mirrored below zero purely as a
-    comparison device, labelled as such;
+  - the traded-volume panel is the matched print's own interval volume,
+    not a cumulative session total, and puts are mirrored below zero
+    purely as a comparison device, labelled as such;
   - only 4 expiries were live that day, so the IV surface is a heatmap
     (moneyness x expiry) rather than a continuous 3D surface, and cells
     outside the moneyness range that expiry actually traded are left as

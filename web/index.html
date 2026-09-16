@@ -274,9 +274,13 @@
         <div class="field">
           <label for="sessionSelect">Session</label>
           <select class="select" id="sessionSelect">
-            <option value="data/market_snapshot.json">2024-12-27 (paired with the attribution demo)</option>
+            <option value="data/market_snapshot.json">2024-12-27</option>
             <option value="data/market_snapshot_2026.json">2026-03-11 (new Thu&rarr;Tue expiry day)</option>
           </select>
+        </div>
+        <div class="field">
+          <label for="hourSelect">Hour</label>
+          <select class="select" id="hourSelect"></select>
         </div>
         <div class="field">
           <label for="expirySelect">Expiry</label>
@@ -294,7 +298,7 @@
     </div>
 
     <div class="snapshot-strip" id="snapshotStrip"></div>
-    <div class="legend-note" style="padding:0;">No bid/ask in this dataset -- every price below is the last traded print at 09:45 IST, not a live quote. Treat single-print premiums as indicative, not executable.</div>
+    <div class="legend-note" style="padding:0;">No bid/ask in this dataset -- every price below is the most recent real print at or before the selected hour (&plusmn;3 min staleness cap), not a live quote. Treat single-print premiums as indicative, not executable.</div>
 
     <div class="grid2">
       <div class="card">
@@ -344,7 +348,7 @@
       <div class="card">
         <div class="card-head"><h3>Traded volume by strike</h3><span class="hint">Contracts traded per minute (puts mirrored)</span></div>
         <div class="card-body"><div class="chart" id="chartVolume"></div></div>
-        <div class="legend-note">Put bars are mirrored below zero purely to compare call vs. put activity at a glance -- they are not negative volume. This is the single 09:45 minute bar's own traded volume, not a cumulative session total, and there is no bid/ask in this dataset to check it against a real spread.</div>
+        <div class="legend-note">Put bars are mirrored below zero purely to compare call vs. put activity at a glance -- they are not negative volume. This is the matched print's own traded volume at the selected hour, not a cumulative session total, and there is no bid/ask in this dataset to check it against a real spread.</div>
       </div>
     </div>
   </div>
