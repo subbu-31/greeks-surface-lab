@@ -58,7 +58,7 @@ process.stdout.write(JSON.stringify(out));
     return json.loads(result.stdout)
 
 
-def test_js_matches_python_across_random_cases():
+def _worst_relative_errors():
     cases = gen_cases()
     js_out = run_js(cases)
     py_fns = {"price": price, "delta": delta, "gamma": lambda S, K, T, sigma, cp, r: gamma(S, K, T, sigma, r),
@@ -72,13 +72,17 @@ def test_js_matches_python_across_random_cases():
             diff = abs(py_val - js_val)
             scale = max(1.0, abs(py_val))
             worst[field] = max(worst.get(field, 0.0), diff / scale)
-    for field, rel_err in worst.items():
-        assert rel_err < TOL, f"{field}: worst relative error {rel_err:.2e} exceeds {TOL:.0e}"
     return worst
 
 
+def test_js_matches_python_across_random_cases():
+    worst = _worst_relative_errors()
+    for field, rel_err in worst.items():
+        assert rel_err < TOL, f"{field}: worst relative error {rel_err:.2e} exceeds {TOL:.0e}"
+
+
 if __name__ == "__main__":
-    worst = test_js_matches_python_across_random_cases()
+    worst = _worst_relative_errors()
     for field, rel_err in worst.items():
         print(f"  ok  {field:<8} worst relative error {rel_err:.2e}")
     print("\nJS/Python parity confirmed")

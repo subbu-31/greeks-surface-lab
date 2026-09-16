@@ -1,5 +1,7 @@
 # Greeks Surface Lab
 
+[![CI](https://github.com/subbu-31/greeks-surface-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/subbu-31/greeks-surface-lab/actions/workflows/ci.yml)
+
 A standalone, dependency-free Black-Scholes solver, a Greek-based P&L
 attribution engine built on top of it, and two 3D-first ways to look at
 the solver itself: a closed-form Greeks explorer you drive with sliders,
@@ -17,9 +19,9 @@ parity and an independent JS reimplementation used by the web page.
 
 - `bs_solver/black_scholes.py` -- price, implied vol (bisection), delta,
   gamma, vega, theta, rho, vanna, charm, volga. Stdlib only, no
-  pandas/numpy. The first-order Greeks were originally extracted from a
-  NIFTY options research pipeline's `lib/bs.py`; this repo has no
-  dependency on that project.
+  pandas/numpy, fully typed (`mypy --strict` clean). The first-order Greeks
+  were originally extracted from a NIFTY options research pipeline's
+  `lib/bs.py`; this repo has no dependency on that project.
 - `bs_solver/attribution.py` -- the Greek attribution engine: given an
   option's (or a book's) parameters at two points in time, decomposes the
   actual price change into eight Greek contributions -- delta, gamma,
@@ -84,19 +86,28 @@ parity and an independent JS reimplementation used by the web page.
 ```
 pip install .                    # solver + attribution engine only, zero dependencies
 pip install ".[snapshot-tools]"  # + pandas, needed only to rebuild web/data/*.json
+pip install ".[dev]"             # + pytest, mypy -- what CI runs, see below
 ```
+
+`bs_solver` ships a `py.typed` marker (PEP 561) and passes `mypy --strict`
+with zero suppressions besides two narrow, commented ones where mypy can't
+follow a runtime field-name list against a `TypedDict` -- a known limitation
+of the type system, not an unchecked path.
 
 ## Running it
 
 ```
-python3 tests/test_black_scholes.py      # sanity-check the solver
-python3 tests/test_greeks_finite_diff.py # every Greek against a finite difference of the one before it
-python3 tests/test_attribution.py        # sanity-check the attribution engine
-python3 tests/test_js_parity.py          # cross-check explorer.js against the Python solver
-python3 scripts/attribute_pnl.py         # straddle, then strangle, then iron condor, on 5 real days
-python3 -m http.server 8000 -d web       # serve the page (fetch() needs http://, not file://)
+pytest                                    # full suite (33 tests) via standard tooling
+mypy                                      # strict type check, zero dependencies beyond the stdlib types
+python3 tests/test_black_scholes.py       # any test file also runs standalone, no pytest required
+python3 tests/test_greeks_finite_diff.py  # every Greek against a finite difference of the one before it
+python3 tests/test_attribution.py         # sanity-check the attribution engine
+python3 tests/test_js_parity.py           # cross-check explorer.js against the Python solver
+python3 scripts/attribute_pnl.py          # straddle, then strangle, then iron condor, on 5 real days
+python3 -m http.server 8000 -d web        # serve the page (fetch() needs http://, not file://)
 ```
-Then open `http://localhost:8000`.
+Then open `http://localhost:8000`. CI (`.github/workflows/ci.yml`) runs
+`mypy` and `pytest` on every push, across Python 3.9-3.12.
 
 To rebuild the market snapshot or the attribution series against a
 different date/expiry, edit the constants at the top of

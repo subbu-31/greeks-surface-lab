@@ -12,10 +12,65 @@ residual. Decomposing the cross terms explicitly (rather than leaving them
 in one undifferentiated residual) is what turns "the Greeks mostly explain
 it" into an actual account of *which* Greek did what.
 """
-from .black_scholes import price, delta, gamma, vega, theta, rho, vanna, charm, volga, RF
+from __future__ import annotations
+
+from typing import Any, Iterable, List, Optional, TypedDict
+
+from .black_scholes import CP, RF, charm, delta, gamma, price, rho, theta, vanna, vega, volga
 
 
-def attribute_leg(S0, S1, K, T0, T1, sigma0, sigma1, cp, r0=RF, r1=None, qty=1.0):
+class Greeks(TypedDict):
+    delta: float
+    gamma: float
+    vega: float
+    theta: float
+    rho: float
+    vanna: float
+    charm: float
+    volga: float
+
+
+class LegAttribution(TypedDict):
+    price0: float
+    price1: float
+    actual_pnl: float
+    delta_pnl: float
+    gamma_pnl: float
+    vega_pnl: float
+    volga_pnl: float
+    vanna_pnl: float
+    theta_pnl: float
+    charm_pnl: float
+    rho_pnl: float
+    residual: float
+    greeks_t0: Greeks
+
+
+class TotalRow(TypedDict):
+    price0: float
+    price1: float
+    actual_pnl: float
+    delta_pnl: float
+    gamma_pnl: float
+    vega_pnl: float
+    volga_pnl: float
+    vanna_pnl: float
+    theta_pnl: float
+    charm_pnl: float
+    rho_pnl: float
+    residual: float
+    pct_explained: float
+
+
+class PortfolioAttribution(TypedDict):
+    legs: List[LegAttribution]
+    total: TotalRow
+
+
+def attribute_leg(S0: float, S1: float, K: float, T0: float, T1: float,
+                   sigma0: float, sigma1: float, cp: CP,
+                   r0: float = RF, r1: Optional[float] = None,
+                   qty: float = 1.0) -> LegAttribution:
     """Attribute one leg's P&L between two snapshots to its Greeks at t0.
 
     S0/S1: spot before/after. T0/T1: years-to-expiry before/after (T1 < T0
@@ -80,7 +135,7 @@ PNL_FIELDS = ["price0", "price1", "actual_pnl", "delta_pnl", "gamma_pnl", "vega_
               "volga_pnl", "vanna_pnl", "theta_pnl", "charm_pnl", "rho_pnl", "residual"]
 
 
-def attribute_portfolio(legs):
+def attribute_portfolio(legs: Iterable[dict[str, Any]]) -> PortfolioAttribution:
     """Sum attribute_leg(**leg) across a book. `legs` is a list of dicts,
     each with the keyword arguments attribute_leg takes (qty included).
 
@@ -102,9 +157,12 @@ def attribute_portfolio(legs):
     guards against and the fix.
     """
     rows = [attribute_leg(**leg) for leg in legs]
-    total = {f: sum(r[f] for r in rows) for f in PNL_FIELDS}
+    # PNL_FIELDS is a runtime list, not a set of literals, so mypy can't
+    # verify each `f` is a valid LegAttribution key here -- it is, by
+    # construction (PNL_FIELDS is exactly attribute_leg's numeric fields).
+    total: dict[str, float] = {f: sum(r[f] for r in rows) for f in PNL_FIELDS}  # type: ignore[literal-required]
     explained = total["actual_pnl"] - total["residual"]
     total["pct_explained"] = (
         explained / total["actual_pnl"] if total["actual_pnl"] != 0 else float("nan")
     )
-    return {"legs": rows, "total": total}
+    return {"legs": rows, "total": total}  # type: ignore[typeddict-item]

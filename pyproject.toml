@@ -8,12 +8,31 @@ version = "0.1.0"
 description = "A standalone Black-Scholes solver and Greek-based P&L attribution engine, stdlib only."
 readme = "README.md"
 requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Subhash Sadacharam"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+]
 dependencies = []
 
 [project.optional-dependencies]
 # Only needed to rebuild web/data/*.json from raw option archives
 # (scripts/build_market_snapshot.py, scripts/build_snapshot_series.py).
 snapshot-tools = ["pandas>=1.5"]
+dev = ["pytest>=7", "mypy>=1.8"]
 
 [tool.setuptools.packages.find]
 include = ["bs_solver*"]
+
+[tool.setuptools.package-data]
+bs_solver = ["py.typed"]
+
+[tool.mypy]
+strict = true
+files = ["bs_solver"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
