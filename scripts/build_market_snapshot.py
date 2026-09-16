@@ -33,6 +33,7 @@ still works cleanly on that changed convention.
 import argparse
 import json
 import math
+import os
 import re
 import sys
 import zipfile
@@ -44,7 +45,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bs_solver import implied_vol, delta, gamma, vega, theta, rf_rate
 
-DL_DIR = Path("/Users/ramasamysadacharam/Desktop/nifty options data")
+# Overridable via the DL_DIR env var (see README "Reproducing") -- the
+# default only ever resolves to a path on the machine running it, never a
+# literal committed to version control.
+DL_DIR = Path(os.environ.get("DL_DIR", str(Path.home() / "Desktop" / "nifty options data")))
 DEFAULT_OUT = Path(__file__).resolve().parents[1] / "web" / "data" / "market_snapshot.json"
 LEG_RE = re.compile(r"^(\d+)(CE|PE)_(\d{8})\.csv$")
 
@@ -111,13 +115,13 @@ def price_expiry_at(expiry: str, spot_df: pd.DataFrame, legs: dict[tuple[int, st
         close, volume = nearest_prior(df, snapshot_date, time_, require_volume=True)
         if close is None or close <= 0.5:
             continue
-        iv = implied_vol(close, S, strike, T, cp, rf)
+        iv = implied_vol(close, S, strike, T, cp, r=rf)
         if iv is None or not (0.02 < iv < 3.0):
             continue
-        d = delta(S, strike, T, iv, cp, rf)
-        g = gamma(S, strike, T, iv, rf)
-        v = vega(S, strike, T, iv, rf)
-        th = theta(S, strike, T, iv, cp, rf)
+        d = delta(S, strike, T, iv, cp, r=rf)
+        g = gamma(S, strike, T, iv, r=rf)
+        v = vega(S, strike, T, iv, r=rf)
+        th = theta(S, strike, T, iv, cp, r=rf)
         rows.append({
             "strike": strike, "cp": cp, "close": close, "volume": volume,
             "moneyness": round(strike / S, 4), "iv": round(iv, 4),

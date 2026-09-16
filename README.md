@@ -1,6 +1,9 @@
 # Greeks Surface Lab
 
 [![CI](https://github.com/subbu-31/greeks-surface-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/subbu-31/greeks-surface-lab/actions/workflows/ci.yml)
+[![Python 3.9 | 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-3776ab?logo=python&logoColor=white)](pyproject.toml)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-2a6db2)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3da35d)](LICENSE)
 
 A standalone, dependency-free Black-Scholes solver, a Greek-based P&L
 attribution engine built on top of it, and two 3D-first ways to look at
@@ -139,16 +142,25 @@ with zero suppressions besides two narrow, commented ones where mypy can't
 follow a runtime field-name list against a `TypedDict` -- a known limitation
 of the type system, not an unchecked path.
 
-## Running it
+## Reproducing
+
+Every number and every chart in this README, and everything the web page
+shows, comes from one of two things: a closed-form formula (no data
+needed), or a derived JSON file already committed at `web/data/*.json` and
+`web/data/snapshot_series.json`. **The raw NIFTY archives themselves are
+not included** -- they come from a licensed market-data source and aren't
+redistributable -- so the solver, the attribution engine, the test suite,
+and the web page all run and reproduce fully without them. Only
+regenerating the derived JSON from scratch needs the raw archives.
 
 ```
-pytest                                    # full suite (33 tests) via standard tooling
+pytest                                    # full suite (36 tests), <1 sec, no data needed
 mypy                                      # strict type check, zero dependencies beyond the stdlib types
 python3 tests/test_black_scholes.py       # any test file also runs standalone, no pytest required
 python3 tests/test_greeks_finite_diff.py  # every Greek against a finite difference of the one before it
 python3 tests/test_attribution.py         # sanity-check the attribution engine
 python3 tests/test_js_parity.py           # cross-check explorer.js against the Python solver
-python3 scripts/attribute_pnl.py          # straddle, then strangle, then iron condor, on 5 real days
+python3 scripts/attribute_pnl.py          # straddle, then strangle, then iron condor, on 5 real days -- <1 sec, reads the committed snapshot_series.json
 python3 -m http.server 8000 -d web        # serve the page (fetch() needs http://, not file://)
 ```
 Then open `http://localhost:8000` and use the **Session** selector on the
@@ -158,11 +170,25 @@ that session's own trading day -- every chart on the tab re-renders against
 the selected hour's real prints. CI (`.github/workflows/ci.yml`) runs `mypy` and
 `pytest` on every push, across Python 3.9-3.12.
 
-To rebuild the market snapshot against a different date, `DL_DIR=... python3
-scripts/build_market_snapshot.py --date YYYY-MM-DD --out web/data/whatever.json`
-(add its path to the `sessionSelect` options in `web/index.html` to see it
-in the dashboard). The attribution series' date/expiry/strike-offset
-constants are still at the top of `scripts/build_snapshot_series.py`.
+Regenerating the derived JSON from the raw archives (not needed to run
+anything above) needs `DL_DIR` pointing at a local copy -- `<DL_DIR>/<expiry
+YYYYMMDD>.zip` containing `nifty_spot.csv` and one `{strike}{CE|PE}_{expiry}.csv`
+per traded leg, the same layout the source research pipeline used. Nothing
+in this repo hardcodes a username, host, or credential for it: `DL_DIR`
+defaults to `~/Desktop/nifty options data` but is fully overridable by the
+environment variable of the same name.
+
+```
+DL_DIR=/path/to/archives python3 scripts/build_market_snapshot.py \
+  --date 2024-12-27 --out web/data/market_snapshot.json    # ~6 sec, the primary session
+DL_DIR=/path/to/archives python3 scripts/build_market_snapshot.py \
+  --date 2026-03-11 --out web/data/market_snapshot_2026.json  # ~15 sec, the breadth session (more live expiries; see "two sessions")
+DL_DIR=/path/to/archives python3 scripts/build_snapshot_series.py  # <1 sec, five-day attribution series
+```
+A new date's output only appears in the dashboard once its path is added to
+the `sessionSelect` options in `web/index.html`. The attribution series'
+date/expiry/strike-offset constants are still at the top of
+`scripts/build_snapshot_series.py`.
 
 ## A real bug found while building this
 
@@ -363,6 +389,46 @@ agree" rather than "nothing loaded", which is what actually happened.
 disables Session/Hour/Expiry/Quotes with an explicit instruction ("serve
 this over HTTP") instead of leaving them in that ambiguous state -- see
 "Running it" above for the one-line server command.
+
+## `r` used to default to a flat constant, right next to the lesson that should have killed that
+
+Every pricing function in `black_scholes.py` -- `price`, `delta`, `gamma`,
+all the way through `volga` -- defaulted `r` to a module-level `RF = 0.065`
+constant. A caller that forgot to pass a rate wouldn't error; it would
+silently get 6.50% forever, regardless of what date it was actually pricing
+for. That's the exact bug class `bs_solver/rates.py` exists to catch --
+this project already found and fixed a flat, unchecked `RF` constant twice
+before (a sibling repo's Sharpe/Sortino calculations, and this repo's own
+2025-06-02 market snapshot, both documented above) -- and yet the core
+library's own default argument was still shaped exactly like the thing
+those fixes were for. A comment warned callers to always pass `r` after a
+certain date; a comment is not enforcement.
+
+Fixed by making `r` a required, keyword-only argument on every function in
+`black_scholes.py` (`def price(..., *, r: float)`, no default) and removing
+`RF` entirely -- `attribute_leg`'s analogous `r0: float = RF` default got
+the same treatment, since it was the identical pattern one layer up. Every
+call site in the package, the scripts, and the tests now names its rate
+explicitly (`r=rf_rate(date)` in the data-prep scripts, an explicit local
+constant in the tests) rather than inheriting one silently. Verified
+byte-identical output from `build_market_snapshot.py` before and after the
+change, confirming this was a pure API-safety fix with no behavior change
+for any call site that was already passing `r` correctly.
+
+One loose thread from that fix: `build_snapshot_series.py` still had its
+own flat local `RF = 0.065`, passed explicitly (so not caught by the
+keyword-only change above), rather than `rf_rate()` -- numerically correct
+for its fixed 5-day window (2024-12-26 to 2025-01-01, entirely inside the
+unbroken pre-2025-02-07 regime), but the same flat-constant shape the rest
+of the project had just moved away from. Switched it to `rf_rate(d)`
+computed per sampled day, recorded each day's own rate in its sample
+(`"risk_free"` per day, not just once for the whole payload), and added an
+explicit check that logs a warning if a future, wider sample window ever
+spans an actual rate change -- `attribute_pnl.py` reads one payload-level
+rate for the whole window today, which is only valid because this
+particular window never crosses a cut. Verified: identical IVs and
+identical attribution percentages (92.9% / 93.7% / 92.8%) before and after,
+confirming this was also a pure sourcing fix, not a numeric one.
 
 ## What's real and what isn't
 

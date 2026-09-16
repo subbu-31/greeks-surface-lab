@@ -61,9 +61,12 @@ process.stdout.write(JSON.stringify(out));
 def _worst_relative_errors():
     cases = gen_cases()
     js_out = run_js(cases)
-    py_fns = {"price": price, "delta": delta, "gamma": lambda S, K, T, sigma, cp, r: gamma(S, K, T, sigma, r),
-              "vega": lambda S, K, T, sigma, cp, r: vega(S, K, T, sigma, r), "theta": theta,
-              "rho": rho}
+    py_fns = {"price": lambda S, K, T, sigma, cp, r: price(S, K, T, sigma, cp, r=r),
+              "delta": lambda S, K, T, sigma, cp, r: delta(S, K, T, sigma, cp, r=r),
+              "gamma": lambda S, K, T, sigma, cp, r: gamma(S, K, T, sigma, r=r),
+              "vega": lambda S, K, T, sigma, cp, r: vega(S, K, T, sigma, r=r),
+              "theta": lambda S, K, T, sigma, cp, r: theta(S, K, T, sigma, cp, r=r),
+              "rho": lambda S, K, T, sigma, cp, r: rho(S, K, T, sigma, cp, r=r)}
     worst = {}
     for c, js in zip(cases, js_out):
         for field, fn in py_fns.items():

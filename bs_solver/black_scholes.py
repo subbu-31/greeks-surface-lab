@@ -17,10 +17,6 @@ from typing import Literal, Optional, Union
 CP = Literal["CE", "PE"]
 DateLike = Union[str, date, datetime]
 
-RF = 0.065   # default risk-free rate -- matches India's RBI repo rate Feb 2023 to Feb 2025,
-             # NOT after: 6.25% from 2025-02-07, 6.00% from 2025-04-09, 5.50% from 2025-06-06
-             # (confirmed against RBI/PIB press releases). Always pass r explicitly for a date
-             # after 2025-02-07 -- this default is a fallback for the un-cut period, not "today".
 YEAR = 365.0
 
 
@@ -39,7 +35,7 @@ def _d1_d2(S: float, K: float, T: float, sigma: float, r: float) -> tuple[float,
     return d1, d1 - sigma * math.sqrt(T)
 
 
-def price(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> float:
+def price(S: float, K: float, T: float, sigma: float, cp: CP, *, r: float) -> float:
     """Option price. At T<=0 or sigma<=0, falls back to intrinsic value."""
     if T <= 0 or sigma <= 0:
         return max(0.0, S - K) if cp == "CE" else max(0.0, K - S)
@@ -49,7 +45,7 @@ def price(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> 
     return K * math.exp(-r * T) * _nd(-d2) - S * _nd(-d1)
 
 
-def implied_vol(option_price: float, S: float, K: float, T: float, cp: CP, r: float = RF,
+def implied_vol(option_price: float, S: float, K: float, T: float, cp: CP, *, r: float,
                  lo: float = 0.005, hi: float = 4.0, tol: float = 1e-5,
                  iters: int = 80) -> Optional[float]:
     """Bisection solve for sigma. Returns None outside the no-arbitrage band.
@@ -66,13 +62,13 @@ def implied_vol(option_price: float, S: float, K: float, T: float, cp: CP, r: fl
     intrinsic = max(0.0, S - K) if cp == "CE" else max(0.0, K - S)
     if option_price < intrinsic - 1e-6:
         return None
-    if price(S, K, T, hi, cp, r) < option_price:
+    if price(S, K, T, hi, cp, r=r) < option_price:
         return None
-    if price(S, K, T, lo, cp, r) > option_price:
+    if price(S, K, T, lo, cp, r=r) > option_price:
         return None
     for _ in range(iters):
         mid = 0.5 * (lo + hi)
-        if price(S, K, T, mid, cp, r) > option_price:
+        if price(S, K, T, mid, cp, r=r) > option_price:
             hi = mid
         else:
             lo = mid
@@ -81,14 +77,14 @@ def implied_vol(option_price: float, S: float, K: float, T: float, cp: CP, r: fl
     return 0.5 * (lo + hi)
 
 
-def delta(S: float, K: float, T: float, sigma: Optional[float], cp: CP, r: float = RF) -> float:
+def delta(S: float, K: float, T: float, sigma: Optional[float], cp: CP, *, r: float) -> float:
     if T <= 0 or sigma is None or sigma <= 0:
         return (1.0 if S > K else 0.0) if cp == "CE" else (-1.0 if S < K else 0.0)
     d1, _ = _d1_d2(S, K, T, sigma, r)
     return _nd(d1) if cp == "CE" else _nd(d1) - 1.0
 
 
-def gamma(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
+def gamma(S: float, K: float, T: float, sigma: float, *, r: float) -> float:
     """Same for calls and puts. Rate of change of delta per unit of spot."""
     if T <= 0 or sigma <= 0:
         return 0.0
@@ -96,7 +92,7 @@ def gamma(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
     return _npdf(d1) / (S * sigma * math.sqrt(T))
 
 
-def vega(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
+def vega(S: float, K: float, T: float, sigma: float, *, r: float) -> float:
     """Same for calls and puts. Per 1.00 (100 vol points) change in sigma --
     divide by 100 for the conventional 'per 1 vol point' quote."""
     if T <= 0 or sigma <= 0:
@@ -105,7 +101,7 @@ def vega(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
     return S * _npdf(d1) * math.sqrt(T)
 
 
-def theta(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> float:
+def theta(S: float, K: float, T: float, sigma: float, cp: CP, *, r: float) -> float:
     """Per year -- divide by 365 for the conventional 'per day' quote."""
     if T <= 0 or sigma <= 0:
         return 0.0
@@ -116,7 +112,7 @@ def theta(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> 
     return decay + r * K * math.exp(-r * T) * _nd(-d2)
 
 
-def rho(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> float:
+def rho(S: float, K: float, T: float, sigma: float, cp: CP, *, r: float) -> float:
     """Per 1.00 (100 percentage points) change in the risk-free rate."""
     if T <= 0 or sigma <= 0:
         return 0.0
@@ -126,7 +122,7 @@ def rho(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> fl
     return -K * T * math.exp(-r * T) * _nd(-d2)
 
 
-def vanna(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
+def vanna(S: float, K: float, T: float, sigma: float, *, r: float) -> float:
     """d(delta)/d(sigma), equivalently d(vega)/dS. Same for calls and puts
     (delta_put = delta_call - 1, a constant shift that vanishes on
     differentiation). Verified against a finite difference of delta() --
@@ -138,7 +134,7 @@ def vanna(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
     return -_npdf(d1) * d2 / sigma
 
 
-def charm(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> float:
+def charm(S: float, K: float, T: float, sigma: float, cp: CP, *, r: float) -> float:
     """d(delta)/d(time elapsed) -- matches theta()'s sign convention (decay
     per unit of calendar time passing, not per unit of time-to-expiry).
     Same value for calls and puts, same reasoning as vanna(). cp is accepted
@@ -151,12 +147,12 @@ def charm(S: float, K: float, T: float, sigma: float, cp: CP, r: float = RF) -> 
     return -_npdf(d1) * (2 * r * T - d2 * sigma * math.sqrt(T)) / (2 * T * sigma * math.sqrt(T))
 
 
-def volga(S: float, K: float, T: float, sigma: float, r: float = RF) -> float:
+def volga(S: float, K: float, T: float, sigma: float, *, r: float) -> float:
     """d(vega)/d(sigma), a.k.a. vomma. Same for calls and puts."""
     if T <= 0 or sigma <= 0:
         return 0.0
     d1, d2 = _d1_d2(S, K, T, sigma, r)
-    return vega(S, K, T, sigma, r) * d1 * d2 / sigma
+    return vega(S, K, T, sigma, r=r) * d1 * d2 / sigma
 
 
 def years_to_expiry(entry_ts: Union[str, datetime], expiry_date: DateLike,

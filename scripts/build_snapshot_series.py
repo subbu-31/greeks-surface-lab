@@ -15,6 +15,7 @@ Each option CSV spans roughly the three weeks up to its own expiry, so one
 archive is enough to sample several real days for one set of strikes.
 """
 import json
+import os
 import re
 import sys
 import zipfile
@@ -23,13 +24,15 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from bs_solver import implied_vol
+from bs_solver import implied_vol, rf_rate
 
-DL_DIR = Path("/Users/ramasamysadacharam/Desktop/nifty options data")
+# Overridable via the DL_DIR env var (see README "Reproducing") -- the
+# default only ever resolves to a path on the machine running it, never a
+# literal committed to version control.
+DL_DIR = Path(os.environ.get("DL_DIR", str(Path.home() / "Desktop" / "nifty options data")))
 OUT = Path(__file__).resolve().parents[1] / "web" / "data" / "snapshot_series.json"
 LEG_RE = re.compile(r"^(\d+)(CE|PE)_(\d{8})\.csv$")
 ENTRY_TIME = "09:45:00"
-RF = 0.065
 
 SNAPSHOT_EXPIRY = "20250109"   # a representative mid-sample weekly expiry
 N_SAMPLE_DAYS = 5              # last N trading days before this expiry
@@ -139,13 +142,14 @@ def main():
             if S is None:
                 print(f"  {d}: no spot print within {MAX_STALENESS_MIN}min of {ENTRY_TIME}, skipping"); continue
             T = years_to_expiry(d, ENTRY_TIME, SNAPSHOT_EXPIRY)
+            r = rf_rate(d)  # date-aware, not a flat constant -- see bs_solver.rates
 
             legs_out, ok = {}, True
             for name, df in legs_df.items():
                 close, volume = nearest_prior_print(df, "ts", d, ENTRY_TIME, MAX_STALENESS_MIN, require_volume=True)
                 if close is None:
                     ok = False; break
-                iv = implied_vol(close, S, leg_strike[name], T, leg_cp[name], RF)
+                iv = implied_vol(close, S, leg_strike[name], T, leg_cp[name], r=r)
                 if iv is None:
                     ok = False; break
                 legs_out[name] = {"close": close, "iv": round(iv, 4), "volume": volume,
@@ -154,13 +158,26 @@ def main():
                 print(f"  {d}: missing a real print or IV solve failed on one leg, skipping"); continue
 
             samples.append({"date": d, "time": ENTRY_TIME, "spot": S, "dte_days": round(T * 365, 3),
-                             "legs": legs_out})
+                             "risk_free": r, "legs": legs_out})
             illiquid = [k for k, v in legs_out.items() if not v["liquid"]]
             flag = f"  ILLIQUID: {illiquid}" if illiquid else ""
             print(f"  {d}: spot={S}  dte={round(T*365,2)}d  " +
                   "  ".join(f"{k}_iv={v['iv']}(vol={v['volume']})" for k, v in legs_out.items()) + flag)
 
-    payload = {"expiry": SNAPSHOT_EXPIRY, "strikes": strikes, "risk_free": RF,
+    rates_used = {s["risk_free"] for s in samples}
+    if len(rates_used) > 1:
+        # attribute_pnl.py reads one payload-level "risk_free" for the whole
+        # window (attribute_leg's r1 defaults to r0, i.e. "unchanged") -- true
+        # for every window this script has ever sampled (pre-2025-02-07,
+        # unbroken), checked here rather than assumed silently. A future
+        # window that crosses an RBI decision date would need attribute_pnl.py
+        # to read each sample's own "risk_free" instead of one payload-level
+        # value.
+        print(f"  WARNING: sample window spans a rate change {sorted(rates_used)} -- "
+              f"attribute_pnl.py's single payload-level rate no longer holds")
+    risk_free = samples[0]["risk_free"] if samples else None
+
+    payload = {"expiry": SNAPSHOT_EXPIRY, "strikes": strikes, "risk_free": risk_free,
                "entry_time": ENTRY_TIME, "liquid_min_volume": LIQUID_MIN_VOLUME, "samples": samples}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, indent=1))

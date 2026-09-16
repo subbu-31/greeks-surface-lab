@@ -11,50 +11,50 @@ S, K, T, SIGMA, R = 100.0, 100.0, 0.5, 0.20, 0.05
 
 
 def test_put_call_parity():
-    c = price(S, K, T, SIGMA, "CE", R)
-    p = price(S, K, T, SIGMA, "PE", R)
+    c = price(S, K, T, SIGMA, "CE", r=R)
+    p = price(S, K, T, SIGMA, "PE", r=R)
     lhs = c - p
     rhs = S - K * math.exp(-R * T)
     assert abs(lhs - rhs) < 1e-9
 
 
 def test_price_at_expiry_is_intrinsic():
-    assert price(110, 100, 0, 0.2, "CE") == 10.0
-    assert price(90, 100, 0, 0.2, "CE") == 0.0
-    assert price(90, 100, 0, 0.2, "PE") == 10.0
+    assert price(110, 100, 0, 0.2, "CE", r=R) == 10.0
+    assert price(90, 100, 0, 0.2, "CE", r=R) == 0.0
+    assert price(90, 100, 0, 0.2, "PE", r=R) == 10.0
 
 
 def test_implied_vol_round_trip():
-    px = price(S, K, T, SIGMA, "CE", R)
-    iv = implied_vol(px, S, K, T, "CE", R)
+    px = price(S, K, T, SIGMA, "CE", r=R)
+    iv = implied_vol(px, S, K, T, "CE", r=R)
     assert abs(iv - SIGMA) < 1e-4
 
 
 def test_implied_vol_none_outside_no_arbitrage_band():
-    assert implied_vol(-1, S, K, T, "CE") is None
-    assert implied_vol(price(S, K, T, 0.005, "CE") - 1, S, K, T, "CE") is None
+    assert implied_vol(-1, S, K, T, "CE", r=R) is None
+    assert implied_vol(price(S, K, T, 0.005, "CE", r=R) - 1, S, K, T, "CE", r=R) is None
 
 
 def test_delta_bounds():
-    dc = delta(S, K, T, SIGMA, "CE", R)
-    dp = delta(S, K, T, SIGMA, "PE", R)
+    dc = delta(S, K, T, SIGMA, "CE", r=R)
+    dp = delta(S, K, T, SIGMA, "PE", r=R)
     assert 0.0 <= dc <= 1.0
     assert -1.0 <= dp <= 0.0
     assert abs((dc - dp) - 1.0) < 1e-9  # call delta - put delta == 1
 
 
 def test_gamma_positive_and_symmetric_for_calls_and_puts():
-    assert gamma(S, K, T, SIGMA, R) > 0
+    assert gamma(S, K, T, SIGMA, r=R) > 0
 
 
 def test_vega_positive():
-    assert vega(S, K, T, SIGMA, R) > 0
+    assert vega(S, K, T, SIGMA, r=R) > 0
 
 
 def test_theta_negative_for_atm_long_option():
     # a long ATM option decays -- theta should be negative for both cp
-    assert theta(S, K, T, SIGMA, "CE", R) < 0
-    assert theta(S, K, T, SIGMA, "PE", R) < 0
+    assert theta(S, K, T, SIGMA, "CE", r=R) < 0
+    assert theta(S, K, T, SIGMA, "PE", r=R) < 0
 
 
 def test_years_to_expiry_positive_and_shrinks():

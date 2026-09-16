@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, List, Optional, TypedDict
 
-from .black_scholes import CP, RF, charm, delta, gamma, price, rho, theta, vanna, vega, volga
+from .black_scholes import CP, charm, delta, gamma, price, rho, theta, vanna, vega, volga
 
 
 class Greeks(TypedDict):
@@ -68,8 +68,8 @@ class PortfolioAttribution(TypedDict):
 
 
 def attribute_leg(S0: float, S1: float, K: float, T0: float, T1: float,
-                   sigma0: float, sigma1: float, cp: CP,
-                   r0: float = RF, r1: Optional[float] = None,
+                   sigma0: float, sigma1: float, cp: CP, *,
+                   r0: float, r1: Optional[float] = None,
                    qty: float = 1.0) -> LegAttribution:
     """Attribute one leg's P&L between two snapshots to its Greeks at t0.
 
@@ -77,7 +77,9 @@ def attribute_leg(S0: float, S1: float, K: float, T0: float, T1: float,
     for a forward move in time -- theta_pnl and charm_pnl use the elapsed
     time T0 - T1, matching black_scholes.theta's own per-calendar-time-
     elapsed sign convention). sigma0/sigma1: implied vol before/after.
-    r0/r1: risk-free rate before/after (defaults to unchanged).
+    r0/r1: risk-free rate before/after (r1 defaults to r0 -- "unchanged" is
+    a real modeling default, unlike r0 itself, which every caller must name;
+    see bs_solver.rates.rf_rate() for the source of a real r0/r1 pair).
     qty: signed contracts -- negative for a short leg, scales every term.
 
     Returns price0/price1/actual_pnl at qty scale, each Greek's contribution
@@ -89,17 +91,17 @@ def attribute_leg(S0: float, S1: float, K: float, T0: float, T1: float,
     if r1 is None:
         r1 = r0
 
-    p0 = price(S0, K, T0, sigma0, cp, r0)
-    p1 = price(S1, K, T1, sigma1, cp, r1)
+    p0 = price(S0, K, T0, sigma0, cp, r=r0)
+    p1 = price(S1, K, T1, sigma1, cp, r=r1)
 
-    d0 = delta(S0, K, T0, sigma0, cp, r0)
-    g0 = gamma(S0, K, T0, sigma0, r0)
-    v0 = vega(S0, K, T0, sigma0, r0)
-    th0 = theta(S0, K, T0, sigma0, cp, r0)
-    rh0 = rho(S0, K, T0, sigma0, cp, r0)
-    va0 = vanna(S0, K, T0, sigma0, r0)
-    ch0 = charm(S0, K, T0, sigma0, cp, r0)
-    vo0 = volga(S0, K, T0, sigma0, r0)
+    d0 = delta(S0, K, T0, sigma0, cp, r=r0)
+    g0 = gamma(S0, K, T0, sigma0, r=r0)
+    v0 = vega(S0, K, T0, sigma0, r=r0)
+    th0 = theta(S0, K, T0, sigma0, cp, r=r0)
+    rh0 = rho(S0, K, T0, sigma0, cp, r=r0)
+    va0 = vanna(S0, K, T0, sigma0, r=r0)
+    ch0 = charm(S0, K, T0, sigma0, cp, r=r0)
+    vo0 = volga(S0, K, T0, sigma0, r=r0)
 
     dS = S1 - S0
     dsigma = sigma1 - sigma0

@@ -36,67 +36,67 @@ def rel_err(a, b):
 def test_delta_matches_finite_diff_of_price():
     h = 1e-4
     for S, K, T, sigma, r, cp in cases():
-        fd = (price(S + h, K, T, sigma, cp, r) - price(S - h, K, T, sigma, cp, r)) / (2 * h)
-        assert rel_err(delta(S, K, T, sigma, cp, r), fd) < TOL
+        fd = (price(S + h, K, T, sigma, cp, r=r) - price(S - h, K, T, sigma, cp, r=r)) / (2 * h)
+        assert rel_err(delta(S, K, T, sigma, cp, r=r), fd) < TOL
 
 
 def test_gamma_matches_finite_diff_of_price():
     h = 1e-3
     for S, K, T, sigma, r, cp in cases():
-        fd = (price(S + h, K, T, sigma, cp, r) - 2 * price(S, K, T, sigma, cp, r)
-              + price(S - h, K, T, sigma, cp, r)) / (h * h)
-        assert rel_err(gamma(S, K, T, sigma, r), fd) < 1e-2  # 2nd-order FD is noisier
+        fd = (price(S + h, K, T, sigma, cp, r=r) - 2 * price(S, K, T, sigma, cp, r=r)
+              + price(S - h, K, T, sigma, cp, r=r)) / (h * h)
+        assert rel_err(gamma(S, K, T, sigma, r=r), fd) < 1e-2  # 2nd-order FD is noisier
 
 
 def test_vega_matches_finite_diff_of_price():
     h = 1e-5
     for S, K, T, sigma, r, cp in cases():
-        fd = (price(S, K, T, sigma + h, cp, r) - price(S, K, T, sigma - h, cp, r)) / (2 * h)
-        assert rel_err(vega(S, K, T, sigma, r), fd) < TOL
+        fd = (price(S, K, T, sigma + h, cp, r=r) - price(S, K, T, sigma - h, cp, r=r)) / (2 * h)
+        assert rel_err(vega(S, K, T, sigma, r=r), fd) < TOL
 
 
 def test_theta_matches_finite_diff_of_price():
     """theta is decay per unit of calendar time elapsed = -d(price)/dT."""
     h = 1e-6
     for S, K, T, sigma, r, cp in cases():
-        fd = -(price(S, K, T + h, sigma, cp, r) - price(S, K, T - h, sigma, cp, r)) / (2 * h)
-        assert rel_err(theta(S, K, T, sigma, cp, r), fd) < TOL
+        fd = -(price(S, K, T + h, sigma, cp, r=r) - price(S, K, T - h, sigma, cp, r=r)) / (2 * h)
+        assert rel_err(theta(S, K, T, sigma, cp, r=r), fd) < TOL
 
 
 def test_rho_matches_finite_diff_of_price():
     h = 1e-5
     for S, K, T, sigma, r, cp in cases():
-        fd = (price(S, K, T, sigma, cp, r + h) - price(S, K, T, sigma, cp, r - h)) / (2 * h)
-        assert rel_err(rho(S, K, T, sigma, cp, r), fd) < TOL
+        fd = (price(S, K, T, sigma, cp, r=r + h) - price(S, K, T, sigma, cp, r=r - h)) / (2 * h)
+        assert rel_err(rho(S, K, T, sigma, cp, r=r), fd) < TOL
 
 
 def test_vanna_matches_finite_diff_of_delta():
     h = 1e-5
     for S, K, T, sigma, r, cp in cases():
-        fd = (delta(S, K, T, sigma + h, cp, r) - delta(S, K, T, sigma - h, cp, r)) / (2 * h)
-        assert rel_err(vanna(S, K, T, sigma, r), fd) < TOL
+        fd = (delta(S, K, T, sigma + h, cp, r=r) - delta(S, K, T, sigma - h, cp, r=r)) / (2 * h)
+        assert rel_err(vanna(S, K, T, sigma, r=r), fd) < TOL
 
 
 def test_charm_matches_finite_diff_of_delta():
     h = 1e-6
     for S, K, T, sigma, r, cp in cases():
-        fd = -(delta(S, K, T + h, sigma, cp, r) - delta(S, K, T - h, sigma, cp, r)) / (2 * h)
-        assert rel_err(charm(S, K, T, sigma, cp, r), fd) < TOL
+        fd = -(delta(S, K, T + h, sigma, cp, r=r) - delta(S, K, T - h, sigma, cp, r=r)) / (2 * h)
+        assert rel_err(charm(S, K, T, sigma, cp, r=r), fd) < TOL
 
 
 def test_volga_matches_finite_diff_of_vega():
     h = 1e-5
     for S, K, T, sigma, r, cp in cases():
-        fd = (vega(S, K, T, sigma + h, r) - vega(S, K, T, sigma - h, r)) / (2 * h)
-        assert rel_err(volga(S, K, T, sigma, r), fd) < TOL
+        fd = (vega(S, K, T, sigma + h, r=r) - vega(S, K, T, sigma - h, r=r)) / (2 * h)
+        assert rel_err(volga(S, K, T, sigma, r=r), fd) < TOL
 
 
 def test_vanna_and_charm_are_cp_independent():
     """delta_put = delta_call - 1 (a constant shift), so every derivative
     of delta -- vanna, charm -- must be identical for calls and puts."""
     for S, K, T, sigma, r, _ in cases():
-        assert abs(vanna(S, K, T, sigma, r) - vanna(S, K, T, sigma, r)) < 1e-12
-        assert abs(charm(S, K, T, sigma, "CE", r) - charm(S, K, T, sigma, "PE", r)) < 1e-12
+        assert abs(vanna(S, K, T, sigma, r=r) - vanna(S, K, T, sigma, r=r)) < 1e-12
+        assert abs(charm(S, K, T, sigma, "CE", r=r) - charm(S, K, T, sigma, "PE", r=r)) < 1e-12
 
 
 if __name__ == "__main__":

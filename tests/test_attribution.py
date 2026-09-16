@@ -9,30 +9,30 @@ S, K, T, SIGMA, R = 100.0, 100.0, 0.5, 0.20, 0.05
 
 
 def test_zero_move_is_fully_explained():
-    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA, "CE")
+    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA, "CE", r0=R)
     assert abs(r["actual_pnl"]) < 1e-9
     for f in ("delta_pnl", "gamma_pnl", "vega_pnl", "theta_pnl", "rho_pnl", "residual"):
         assert abs(r[f]) < 1e-9
 
 
 def test_actual_pnl_matches_direct_reprice():
-    r = attribute_leg(S, 102.0, K, T, T, SIGMA, SIGMA, "CE")
-    direct = price(102.0, K, T, SIGMA, "CE") - price(S, K, T, SIGMA, "CE")
+    r = attribute_leg(S, 102.0, K, T, T, SIGMA, SIGMA, "CE", r0=R)
+    direct = price(102.0, K, T, SIGMA, "CE", r=R) - price(S, K, T, SIGMA, "CE", r=R)
     assert abs(r["actual_pnl"] - direct) < 1e-9
 
 
 def test_residual_shrinks_as_move_shrinks():
     """The Taylor expansion is a local approximation -- a smaller spot move
     should leave a smaller (in absolute terms) unexplained residual."""
-    big = attribute_leg(S, S * 1.10, K, T, T, SIGMA, SIGMA, "CE")
-    small = attribute_leg(S, S * 1.01, K, T, T, SIGMA, SIGMA, "CE")
+    big = attribute_leg(S, S * 1.10, K, T, T, SIGMA, SIGMA, "CE", r0=R)
+    small = attribute_leg(S, S * 1.01, K, T, T, SIGMA, SIGMA, "CE", r0=R)
     assert abs(small["residual"]) < abs(big["residual"])
 
 
 def test_pure_time_decay_is_all_theta():
     """Nothing else moves -- delta/gamma/vega/rho terms must be exactly
     zero and theta should account for (nearly) the whole repricing."""
-    r = attribute_leg(S, S, K, T, T - 30 / 365, SIGMA, SIGMA, "CE")
+    r = attribute_leg(S, S, K, T, T - 30 / 365, SIGMA, SIGMA, "CE", r0=R)
     assert r["delta_pnl"] == 0.0 and r["gamma_pnl"] == 0.0
     assert r["vega_pnl"] == 0.0 and r["rho_pnl"] == 0.0
     assert abs(r["residual"]) < abs(r["actual_pnl"]) * 0.05
@@ -42,7 +42,7 @@ def test_cross_terms_reduce_the_residual():
     """A move in both spot and vol together is exactly where the pure
     first-order/gamma decomposition leaves the most on the table -- vanna
     (the dS*dsigma cross term) should recover most of it."""
-    r = attribute_leg(S, S * 1.08, K, T, T, SIGMA, SIGMA * 1.3, "CE")
+    r = attribute_leg(S, S * 1.08, K, T, T, SIGMA, SIGMA * 1.3, "CE", r0=R)
     first_order_only = r["delta_pnl"] + r["gamma_pnl"] + r["vega_pnl"] + r["theta_pnl"] + r["rho_pnl"]
     residual_without_cross_terms = r["actual_pnl"] - first_order_only
     assert abs(r["residual"]) < abs(residual_without_cross_terms)
@@ -55,14 +55,14 @@ def test_volga_reduces_residual_for_a_large_vol_only_move():
     # correction entirely -- that isn't a bug, it's Taylor expansions being
     # a local approximation, and is exactly why a residual is reported
     # rather than treated as fully closed by any finite Greek ladder.)
-    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA * 1.3, "CE")
+    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA * 1.3, "CE", r0=R)
     first_order_only = r["delta_pnl"] + r["gamma_pnl"] + r["vega_pnl"] + r["theta_pnl"] + r["rho_pnl"]
     residual_without_volga = r["actual_pnl"] - first_order_only
     assert abs(r["residual"]) < abs(residual_without_volga)
 
 
 def test_charm_reduces_residual_for_a_combined_spot_and_time_move():
-    r = attribute_leg(S, S * 1.05, K, T, T - 20 / 365, SIGMA, SIGMA, "CE")
+    r = attribute_leg(S, S * 1.05, K, T, T - 20 / 365, SIGMA, SIGMA, "CE", r0=R)
     first_order_only = r["delta_pnl"] + r["gamma_pnl"] + r["vega_pnl"] + r["theta_pnl"] + r["rho_pnl"]
     residual_without_charm = r["actual_pnl"] - first_order_only
     assert abs(r["residual"]) < abs(residual_without_charm)
@@ -71,7 +71,7 @@ def test_charm_reduces_residual_for_a_combined_spot_and_time_move():
 def test_pure_vol_move_has_no_vanna_or_charm_contribution():
     """Only sigma changes -- dS=0 and dt_elapsed=0, so the two cross terms
     (which both require dS) must vanish exactly, leaving vega + volga."""
-    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA * 1.4, "CE")
+    r = attribute_leg(S, S, K, T, T, SIGMA, SIGMA * 1.4, "CE", r0=R)
     assert r["vanna_pnl"] == 0.0 and r["charm_pnl"] == 0.0
     assert r["volga_pnl"] != 0.0  # the one second-order term that doesn't need dS
 
@@ -110,15 +110,15 @@ def test_rho_pnl_has_the_right_sign_for_a_real_rate_cut():
 
 
 def test_short_leg_flips_the_sign():
-    long_pnl = attribute_leg(S, 105.0, K, T, T, SIGMA, SIGMA, "CE", qty=1.0)
-    short_pnl = attribute_leg(S, 105.0, K, T, T, SIGMA, SIGMA, "CE", qty=-1.0)
+    long_pnl = attribute_leg(S, 105.0, K, T, T, SIGMA, SIGMA, "CE", r0=R, qty=1.0)
+    short_pnl = attribute_leg(S, 105.0, K, T, T, SIGMA, SIGMA, "CE", r0=R, qty=-1.0)
     assert abs(long_pnl["actual_pnl"] + short_pnl["actual_pnl"]) < 1e-9
 
 
 def test_portfolio_sums_its_legs():
     legs = [
-        dict(S0=S, S1=103.0, K=100.0, T0=T, T1=T, sigma0=SIGMA, sigma1=SIGMA, cp="CE", qty=2.0),
-        dict(S0=S, S1=103.0, K=105.0, T0=T, T1=T, sigma0=SIGMA, sigma1=0.22, cp="PE", qty=-1.0),
+        dict(S0=S, S1=103.0, K=100.0, T0=T, T1=T, sigma0=SIGMA, sigma1=SIGMA, cp="CE", r0=R, qty=2.0),
+        dict(S0=S, S1=103.0, K=105.0, T0=T, T1=T, sigma0=SIGMA, sigma1=0.22, cp="PE", r0=R, qty=-1.0),
     ]
     out = attribute_portfolio(legs)
     for f in ("actual_pnl", "delta_pnl", "gamma_pnl", "vega_pnl", "volga_pnl", "vanna_pnl",
@@ -139,8 +139,8 @@ def test_netting_signed_residuals_across_independent_periods_is_misleading():
     quality but opposite-signed residuals, and shows the naive net ratio
     swings enormously while the robust one stays put.
     """
-    day1 = attribute_leg(S, S * 1.06, K, T, T, SIGMA, SIGMA * 1.25, "CE")
-    day2 = attribute_leg(S, S * 0.94, K, T, T, SIGMA, SIGMA * 0.8, "CE")
+    day1 = attribute_leg(S, S * 1.06, K, T, T, SIGMA, SIGMA * 1.25, "CE", r0=R)
+    day2 = attribute_leg(S, S * 0.94, K, T, T, SIGMA, SIGMA * 0.8, "CE", r0=R)
     residuals = [day1["residual"], day2["residual"]]
     actuals = [day1["actual_pnl"], day2["actual_pnl"]]
 
@@ -157,7 +157,7 @@ def test_netting_signed_residuals_across_independent_periods_is_misleading():
 
 
 def test_pct_explained_is_nan_for_zero_actual_pnl():
-    out = attribute_portfolio([dict(S0=S, S1=S, K=K, T0=T, T1=T, sigma0=SIGMA, sigma1=SIGMA, cp="CE")])
+    out = attribute_portfolio([dict(S0=S, S1=S, K=K, T0=T, T1=T, sigma0=SIGMA, sigma1=SIGMA, cp="CE", r0=R)])
     assert out["total"]["pct_explained"] != out["total"]["pct_explained"]  # nan != nan
 
 

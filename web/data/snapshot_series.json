@@ -16,6 +16,7 @@
    "time": "09:45:00",
    "spot": 23802.75,
    "dte_days": 14.24,
+   "risk_free": 0.065,
    "legs": {
     "atm_ce": {
      "close": 217.7,
@@ -60,6 +61,7 @@
    "time": "09:45:00",
    "spot": 23870.25,
    "dte_days": 13.24,
+   "risk_free": 0.065,
    "legs": {
     "atm_ce": {
      "close": 240.1,
@@ -104,6 +106,7 @@
    "time": "09:45:00",
    "spot": 23731.1,
    "dte_days": 10.24,
+   "risk_free": 0.065,
    "legs": {
     "atm_ce": {
      "close": 133.35,
@@ -148,6 +151,7 @@
    "time": "09:45:00",
    "spot": 23519.3,
    "dte_days": 9.24,
+   "risk_free": 0.065,
    "legs": {
     "atm_ce": {
      "close": 78.6,
@@ -192,6 +196,7 @@
    "time": "09:45:00",
    "spot": 23595.15,
    "dte_days": 8.24,
+   "risk_free": 0.065,
    "legs": {
     "atm_ce": {
      "close": 103.0,

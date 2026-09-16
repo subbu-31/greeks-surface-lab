@@ -3,11 +3,14 @@
 Ported from a sibling research pipeline where this exact schedule was built
 after finding a flat `RF = 0.065` constant had been used, unchecked, in
 every Sharpe/Sortino calculation across seven files spanning a multi-year
-sample that actually saw five different rate regimes. `black_scholes.RF`
-has the same flat-constant shape for backward-compatible callers that never
-pass a date; this module exists so a *new* caller (e.g. a script building a
-snapshot for a fresh date) doesn't have to re-derive or eyeball the correct
-rate by hand, which is exactly how the original bug happened.
+sample that actually saw five different rate regimes. `black_scholes.py`'s
+pricing functions used to carry that same flat-constant default for callers
+that never passed a rate -- removed once this module existed to replace it,
+since a default is exactly how the original bug went unnoticed: `r` is now
+a required keyword argument everywhere in `black_scholes.py`, and this
+module exists so a caller (e.g. a script building a snapshot for a fresh
+date) doesn't have to re-derive or eyeball the correct rate by hand, which
+is exactly how the original bug happened.
 """
 from __future__ import annotations
 
