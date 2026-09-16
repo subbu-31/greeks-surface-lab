@@ -30,18 +30,39 @@
   var smileMode = "side";     // "side" | "otm"
   var qualityMode = "all";    // "all" | "liquid" | "parity"
 
-  fetch("data/market_snapshot.json")
-    .then(function(r){
-      if(!r.ok) throw new Error("http " + r.status);
-      return r.json();
-    })
-    .then(function(json){ DATA = json; boot(); })
-    .catch(function(err){
-      document.getElementById("snapshotSub").textContent =
-        "Couldn't load data/market_snapshot.json (" + err.message + "). " +
-        "Serve this folder over HTTP (e.g. `python3 -m http.server` from web/) rather than opening index.html directly -- " +
-        "browsers block local fetch() over file://.";
-    });
+  function loadSession(path){
+    document.getElementById("snapshotSub").textContent = "Loading …";
+    fetch(path)
+      .then(function(r){
+        if(!r.ok) throw new Error("http " + r.status);
+        return r.json();
+      })
+      .then(function(json){ DATA = json; boot(); })
+      .catch(function(err){
+        document.getElementById("snapshotSub").textContent =
+          "Couldn't load " + path + " (" + err.message + "). " +
+          "Serve this folder over HTTP (e.g. `python3 -m http.server` from web/) rather than opening index.html directly -- " +
+          "browsers block local fetch() over file://.";
+      });
+  }
+
+  // One-time control wiring -- runs once regardless of how many sessions get loaded.
+  document.getElementById("sessionSelect").addEventListener("change", function(e){
+    loadSession(e.target.value);
+  });
+  document.getElementById("qualitySelect").addEventListener("change", function(e){
+    qualityMode = e.target.value;
+    renderPerExpiry();
+  });
+  document.getElementById("smileToggle").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if(!btn) return;
+    smileMode = btn.dataset.mode;
+    Array.prototype.forEach.call(this.children, function(el){ el.classList.remove("active"); });
+    btn.classList.add("active");
+    renderSmile(findExpiry(selectedExpiry));
+  });
+
+  loadSession(document.getElementById("sessionSelect").value);
 
   function boot(){
     selectedExpiry = DATA.expiries[0].expiry;
@@ -49,6 +70,7 @@
       DATA.expiries.length + " live expiries pulled from the raw archives at " + SNAP_TS() + ".";
 
     var sel = document.getElementById("expirySelect");
+    sel.innerHTML = "";
     DATA.expiries.forEach(function(exp){
       var o = document.createElement("option");
       o.value = exp.expiry;
@@ -56,20 +78,7 @@
       sel.appendChild(o);
     });
     sel.value = selectedExpiry;
-    sel.addEventListener("change", function(){ selectedExpiry = sel.value; renderPerExpiry(); });
-
-    document.getElementById("qualitySelect").addEventListener("change", function(e){
-      qualityMode = e.target.value;
-      renderPerExpiry();
-    });
-
-    document.getElementById("smileToggle").addEventListener("click", function(e){
-      var btn = e.target.closest("button"); if(!btn) return;
-      smileMode = btn.dataset.mode;
-      Array.prototype.forEach.call(this.children, function(el){ el.classList.remove("active"); });
-      btn.classList.add("active");
-      renderSmile(findExpiry(selectedExpiry));
-    });
+    sel.onchange = function(){ selectedExpiry = sel.value; renderPerExpiry(); };
 
     renderTermAndSkew();
     renderIVSurface();
