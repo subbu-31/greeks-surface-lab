@@ -26,9 +26,11 @@ attribution engine's own first real day, so the two features describe the
 same week. python3 build_market_snapshot.py --date 2026-03-11
 --out web/data/market_snapshot_2026.json is a second, deliberately
 different sample -- NIFTY's weekly expiry moved from Thursday to Tuesday
-by 2026, and this is the breadth check that the pipeline (and the
-date-aware rf_rate() it now uses instead of a hand-verified constant)
-still works cleanly on that changed convention.
+partway through 2025 (confirmed against the raw archive filenames: 2025
+has both regimes, 2026-03-11 sits cleanly in the new one), and this is the
+breadth check that the pipeline (and the date-aware rf_rate() it now uses
+instead of a hand-verified constant) still works cleanly on that changed
+convention.
 """
 import argparse
 import json

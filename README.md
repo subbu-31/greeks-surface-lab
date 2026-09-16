@@ -18,6 +18,23 @@ rho, and the three second-order Greeks (vanna, charm, volga) the
 attribution engine uses, all agreeing to 10⁻⁴-10⁻¹¹ -- plus put-call
 parity and an independent JS reimplementation used by the web page.
 
+**Scope, stated plainly:** Black-Scholes pricing, the Greeks, and IV via
+bisection are textbook, not novel -- nothing here is a new pricing model.
+What this repo demonstrates is process: real market data handled honestly
+(no bid/ask, single last-traded prints, disclosed as such throughout),
+a Greek-based attribution engine verified to reconcile exactly, and a
+documented record of real bugs found and actually fixed rather than
+papered over. Judge it on that basis, not on the mathematics being new.
+
+**Solver Explorer** -- pick a quantity, an option side, and a pair of axes;
+every surface is the closed-form solver evaluated live on a 46×46 grid.
+![Solver Explorer: a Call Price surface over Spot × Time to expiry](docs/img/solver_explorer.png)
+
+**Real NIFTY Snapshot** -- real 1-minute option prints from an actual
+trading session, IV backed out per strike, every chart linked to the same
+Session/Hour/Expiry selection.
+![Real NIFTY Snapshot: IV smile and term structure/skew from a real trading session](docs/img/real_nifty_snapshot.png)
+
 ## Layout
 
 - `bs_solver/black_scholes.py` -- price, implied vol (bisection), delta,
@@ -302,9 +319,16 @@ one. Unified by pointing `build_market_snapshot.py` at 2024-12-27 -- the
 attribution engine's own first real day -- so `20250109` now shows up as
 one of the dashboard's four live expiries too: the smile/skew/term-
 structure view and the Greek attribution breakdown now describe the same
-underlying week. Confirmed, not assumed: both scripts independently
-compute the identical spot print (23,870.25) for that date from their own
-separate reads of `nifty_spot.csv`.
+underlying week. Confirmed, not assumed: `build_snapshot_series.py`'s
+09:45 spot print for 2024-12-27 is 23,819.5 (09:15) < 23,870.25 (09:45)
+< 23,927.1 (10:15) -- `build_market_snapshot.py`'s two nearest hourly
+checkpoints bracket it correctly, from the same real `nifty_spot.csv`
+read independently by each script. (The two scripts no longer sample at
+the same instant -- `build_market_snapshot.py` moved to seven hourly
+checkpoints later, see "the hourly view" below -- so a bracketing check is
+what's verifiable today; an earlier version of this section claimed an
+exact spot match, which was true when both scripts shared one 09:45
+cross-section and stopped being checkable once that changed.)
 
 ## Two sessions, on purpose -- one paired sample and one breadth check
 
@@ -313,30 +337,22 @@ it also means the whole repo now runs on a single real session. To check
 the code generalises rather than being quietly tuned to one week's data,
 `build_market_snapshot.py` also ships a second, deliberately different
 session: `--date 2026-03-11`, more than a year later. NIFTY's weekly
-expiry moved from Thursday to Tuesday by 2026 (confirmed directly against
-the raw archive filenames, not assumed -- every 2024/2025 expiry in this
-dataset is a Thursday, every 2026 one is a Tuesday), so this isn't just a
-different date, it's a different exchange convention. The dashboard's
+expiry moved from Thursday to Tuesday partway through 2025 (confirmed
+directly against the raw archive filenames, not assumed -- checked across
+every 2025 expiry in this dataset, not just skimmed: 34 Thursdays through
+2025-08-28, then Tuesday from 2025-09-02 on, with a handful of
+holiday-shifted Wednesday/Monday exceptions in both eras and one lone
+Thursday outlier the week of 2025-09-25). 2024-12-27 sits cleanly in the
+old Thursday regime and 2026-03-11 sits cleanly in the new Tuesday one, so
+picking sessions on either side of mid-2025 is what actually makes this a
+breadth check across a real exchange-convention change, not just two
+different dates. The dashboard's
 **Session** selector switches between the two prebuilt JSON files with no
 other code path change; both went through the same `build_snapshot()`
 function, the same `rf_rate()` lookup (0.065 for the first, 0.0525 for the
 second -- picked up automatically, not hand-verified per session the way
 the original 0.060/2025-06-02 rate was), and the same in-browser check
 (no console errors, sensible smile/skew on both) before being trusted.
-
-Adding a second session surfaced a real bug in the switching code itself:
-`loadSession(path)`'s `fetch(...).then(...)` had no guard against two
-loads racing -- if an earlier session's fetch happened to resolve *after*
-a later one (plausible on the initial page-load fetch racing a fast
-manual switch, or under ordinary network jitter), its `.then()` would run
-last and silently overwrite the dropdown/charts with the wrong session's
-data while the selector itself still showed the session the user had
-actually chosen. Reproduced directly (firing the switch to 2026 then
-immediately back to 2024 exposed exactly this: selector said 2024, charts
-still showed 2026), then fixed with a monotonic sequence counter --
-each `loadSession()` call captures its own sequence number, and a
-response is applied only if no newer load has started since. Verified
-both directions, including the deliberately-raced case.
 
 ## The hourly view started as a separate card, and that was the wrong shape
 
@@ -368,27 +384,6 @@ fixed number. That range itself is informative: it means the two
 mid-morning/early-afternoon hours checked so far are not meaningfully
 "more parity-valid" than the open or close, consistent with this dataset
 never having a firm quote to check parity against in the first place.
-
-## "Session and Expiry aren't reconciling" turned out to be file://, not the state machine
-
-A report that Session and Expiry looked out of sync sent this back through
-every combination the dashboard's state machine can reach: rapid session
-switches in both orders, a session switch while a non-default Hour and
-Expiry were active, cycling all seven hours under the "Parity-valid only"
-filter (including hours with zero valid pairs), and a full rerun of
-`build_market_snapshot.py` checked for determinism and for any checkpoint
-missing an expiry the others have. All of it reconciled correctly and
-`market.js`'s actual state -- `selectedHour`/`selectedExpiry` plus the
-`by_time` lookup -- was never the problem. The real cause: opening
-`index.html` directly (`file://...`) rather than through a local server.
-Browsers block a page's own `fetch()` requests over `file://`, so `DATA`
-never loads and the dropdowns never populate -- and because every control
-still *looks* interactive, the failure reads as "Session and Expiry don't
-agree" rather than "nothing loaded", which is what actually happened.
-`market.js` now checks `location.protocol` before attempting any fetch and
-disables Session/Hour/Expiry/Quotes with an explicit instruction ("serve
-this over HTTP") instead of leaving them in that ambiguous state -- see
-"Running it" above for the one-line server command.
 
 ## `r` used to default to a flat constant, right next to the lesson that should have killed that
 
@@ -484,13 +479,15 @@ confirming this was also a pure sourcing fix, not a numeric one.
   `build_snapshot_series.py` now records each leg's traded volume and flags
   anything within 3x the 50-lot liquidity floor used elsewhere in this
   project, and the demo prints a liquid-only recheck alongside the
-  headline number. For this week, three of the straddle's four transitions
-  turn out to lean on the ATM put trading only 75 lots (against thousands
-  everywhere else) -- thin enough that "explained by the Greeks" and
-  "priced off a stale minute" aren't distinguishable from this data alone.
-  Excluding those transitions moves the straddle's fit from 93.3% to 92.7%
-  -- reassuringly close, but that comparison now rests on a single
-  remaining transition, so read it as "not obviously inflated by
-  illiquidity" rather than "proven clean." The strangle and condor legs
-  (further OTM, apparently more actively traded this week) show no thin
-  transitions at all under the same check.
+  headline number. For this week, the three structures land in three
+  different liquidity situations, not one: the **straddle** (92.9%
+  explained) leans on the ATM put trading only 75 lots on *every single*
+  transition -- thin enough throughout that no liquid-only recheck is even
+  possible for this structure, so "explained by the Greeks" and "priced
+  off a stale minute" aren't distinguishable from this data alone. The
+  **strangle** (93.7%) has no thin transitions at all -- every leg clears
+  the floor by a wide margin on all four transitions. The **iron condor**
+  (92.8%) sits in between: one of its four transitions is thin (the same
+  75-lot ATM-adjacent print), and excluding it moves the fit to 93.0% --
+  close enough to read as "not obviously inflated by illiquidity," on the
+  three remaining transitions.

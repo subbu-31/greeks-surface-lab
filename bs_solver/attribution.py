@@ -167,4 +167,7 @@ def attribute_portfolio(legs: Iterable[dict[str, Any]]) -> PortfolioAttribution:
     total["pct_explained"] = (
         explained / total["actual_pnl"] if total["actual_pnl"] != 0 else float("nan")
     )
+    # total was built as a plain dict (mypy can't track a dict comprehension
+    # into TotalRow's exact key set), then pct_explained added above -- by
+    # construction it now has exactly TotalRow's keys, which mypy can't see.
     return {"legs": rows, "total": total}  # type: ignore[typeddict-item]
