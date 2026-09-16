@@ -13,10 +13,11 @@ the previous, already-verified one, rather than discovered only at the end.
 Every row also reports the thinnest volume among that transition's legs --
 this attribution is built on last-traded prices with no bid/ask, exactly
 like the market snapshot, and a residual on a thinly-traded print is at
-least as likely to be quote staleness as a missing Greek. See the ATM put
-on 2024-12-30/12-31 below: it clears the 50-lot floor but at 75 contracts
-against thousands elsewhere, "explained by the Greeks" and "priced off a
-stale minute" are not distinguishable from this data alone.
+least as likely to be quote staleness as a missing Greek. The ATM put
+below clears the 50-lot floor but at 75 contracts against thousands
+elsewhere, on *every* straddle transition, not just one of them --
+"explained by the Greeks" and "priced off a stale minute" are not
+distinguishable from this data alone for that structure.
 """
 import json
 import sys

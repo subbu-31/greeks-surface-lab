@@ -50,10 +50,28 @@
     }
   };
 
+  // Calendar mode reuses the real dashboard's own two sessions and seven
+  // hourly checkpoints, rather than a free-form date/time picker -- this
+  // solver has no live or minute-level feed behind it (nothing here
+  // "updates" between checkpoints), so offering minute-by-minute entry
+  // times or arbitrary dates would imply a precision that doesn't exist.
+  // Expiries are each session's own real live expiries (build_market_snapshot.py).
+  // Defined above the Node guard below, and attached to BS, so
+  // tests/test_js_parity.py can check it against the committed
+  // web/data/market_snapshot*.json rather than trusting it stays in sync
+  // by hand -- see test_sessions_match_committed_data there.
+  var SESSIONS = [
+    { date:"2024-12-27", label:"2024-12-27", expiries:["2025-01-02","2025-01-09","2025-01-16","2025-01-23"] },
+    { date:"2026-03-11", label:"2026-03-11 (Thu→Tue expiry day)", expiries:["2026-03-17","2026-03-24","2026-03-30","2026-04-07"] }
+  ];
+  var ENTRY_HOURS = ["09:15","10:15","11:15","12:15","13:15","14:15","15:15"];
+
   if (typeof module !== "undefined" && module.exports) {
     // Node (tests/test_js_parity.py shells out to node to check this
     // object against bs_solver/black_scholes.py) -- everything below this
     // block touches the DOM and Plotly, neither of which exist there.
+    BS.SESSIONS = SESSIONS;
+    BS.ENTRY_HOURS = ENTRY_HOURS;
     module.exports = BS;
     return;
   }
@@ -71,18 +89,6 @@
     S_K: {x:"Spot", y:"Strike"},
     S_V: {x:"Spot", y:"Implied vol (%)"}
   };
-
-  // Calendar mode reuses the real dashboard's own two sessions and seven
-  // hourly checkpoints, rather than a free-form date/time picker -- this
-  // solver has no live or minute-level feed behind it (nothing here
-  // "updates" between checkpoints), so offering minute-by-minute entry
-  // times or arbitrary dates would imply a precision that doesn't exist.
-  // Expiries are each session's own real live expiries (build_market_snapshot.py).
-  var SESSIONS = [
-    { date:"2024-12-27", label:"2024-12-27", expiries:["2025-01-02","2025-01-09","2025-01-16","2025-01-23"] },
-    { date:"2026-03-11", label:"2026-03-11 (Thu→Tue expiry day)", expiries:["2026-03-17","2026-03-24","2026-03-30","2026-04-07"] }
-  ];
-  var ENTRY_HOURS = ["09:15","10:15","11:15","12:15","13:15","14:15","15:15"];
 
   function sessionFor(date){
     return SESSIONS.filter(function(s){ return s.date === date; })[0] || SESSIONS[0];

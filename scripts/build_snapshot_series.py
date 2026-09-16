@@ -112,13 +112,26 @@ def main():
         spot_dates = sorted(spot[spot["ts"].dt.strftime("%Y-%m-%d") <= expiry_date]["ts"].dt.strftime("%Y-%m-%d").unique())
         candidates = spot_dates[-(N_SAMPLE_DAYS * 3):]
 
-        s_guess, _ = nearest_prior_print(spot, "ts", candidates[0], ENTRY_TIME, MAX_STALENESS_MIN, require_volume=False)
+        # candidates[0] (the earliest, most illiquid day in the window) is
+        # exactly where a missing spot print is most likely -- walk forward
+        # instead of assuming the first candidate has one, since s_guess
+        # anchors every strike choice below and a None here would otherwise
+        # crash on the arithmetic rather than fail with a clear message.
+        s_guess, guess_date = None, None
+        for d in candidates:
+            s_guess, _ = nearest_prior_print(spot, "ts", d, ENTRY_TIME, MAX_STALENESS_MIN, require_volume=False)
+            if s_guess is not None:
+                guess_date = d
+                break
+        if s_guess is None:
+            raise SystemExit(f"no spot print within {MAX_STALENESS_MIN}min of {ENTRY_TIME} "
+                              f"on any of {candidates} -- can't anchor strike selection")
         available = sorted({int(m.group(1)) for n in zf.namelist() if (m := LEG_RE.match(Path(n).name))})
 
         strikes = {}
         for name, offset in OFFSETS.items():
             strikes[name] = min(available, key=lambda k: abs(k - (s_guess + offset)))
-        print(f"expiry {SNAPSHOT_EXPIRY}, spot {s_guess} on {candidates[0]}, strikes: {strikes}")
+        print(f"expiry {SNAPSHOT_EXPIRY}, spot {s_guess} on {guess_date}, strikes: {strikes}")
 
         legs_df = {}
         for name, strike in strikes.items():

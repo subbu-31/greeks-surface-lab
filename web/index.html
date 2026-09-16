@@ -126,12 +126,12 @@
   .axis-note{ font-size:11.5px; color:var(--text-faint); line-height:1.5; padding-bottom:2px; }
   .date-field{ display:flex; flex-direction:column; gap:4px; }
   .date-field label{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); }
-  input.date-input, input.time-input, select.time-input{
+  select.time-input{
     background:var(--surface-2); border:1px solid var(--border); color:var(--text);
     font-family:inherit; font-size:12.5px; font-weight:500; padding:7px 10px; border-radius:8px;
     width:100%; box-sizing:border-box; cursor:pointer;
   }
-  input.date-input:focus-visible, input.time-input:focus-visible, select.time-input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  select.time-input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
   .footnote{ font-size:11px; color:var(--text-faint); line-height:1.6; margin-top:auto; padding-top:14px; border-top:1px solid var(--border); }
   .footnote code{ font-family:"IBM Plex Mono",monospace; background:var(--surface-2); padding:1px 4px; border-radius:4px; }
@@ -195,8 +195,7 @@
   .card-toggle button.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   .card-body{ padding:6px 12px 14px; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
-  @media (max-width: 980px){ .grid2, .grid3{ grid-template-columns:1fr; } }
+  @media (max-width: 980px){ .grid2{ grid-template-columns:1fr; } }
   .chart{ width:100%; height:300px; }
   .chart.tall{ height:420px; }
   .chart.small{ height:150px; }
@@ -204,7 +203,6 @@
   .smallmult-row{ display:flex; align-items:center; gap:10px; }
   .smallmult-row .rowlabel{ width:52px; flex:none; font-size:11px; color:var(--text-dim); text-align:right; padding-right:4px; }
   .smallmult-row .chart{ flex:1; min-width:0; }
-  .loading{ color:var(--text-faint); font-size:12.5px; padding:40px; text-align:center; }
   .legend-note{ font-size:11px; color:var(--text-faint); padding:0 18px 12px; line-height:1.5; }
   .quality-summary{ display:flex; gap:16px; flex-wrap:wrap; padding:0 18px 8px; font-size:11.5px; color:var(--text-dim); }
   .quality-summary b{ color:var(--text); font-family:"IBM Plex Mono",monospace; }

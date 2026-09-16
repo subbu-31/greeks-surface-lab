@@ -72,7 +72,12 @@ Session/Hour/Expiry selection.
 - `tests/test_js_parity.py` -- shells out to `node` to run the same random
   grid of (S, K, T, sigma, r, cp) through `web/explorer.js`'s BS object and
   checks it against `black_scholes.py` to within the JS erf approximation's
-  own error bound. Requires `node` on PATH.
+  own error bound. Also checks `explorer.js`'s hardcoded `SESSIONS`
+  constant (the Solver Explorer's Calendar-mode Session/Expiry choices)
+  against the actual `web/data/market_snapshot*.json` it's meant to
+  mirror -- the two have no runtime link, so nothing else would catch
+  them drifting apart if either JSON is ever regenerated differently.
+  Requires `node` on PATH.
 - `tests/test_rates.py` -- checks `rf_rate()` against every RBI/PIB
   decision date it's sourced from, that it treats a `date`/`datetime`/ISO
   string identically, and that its no-date fallback is the *latest* known
@@ -171,7 +176,7 @@ and the web page all run and reproduce fully without them. Only
 regenerating the derived JSON from scratch needs the raw archives.
 
 ```
-pytest                                    # full suite (36 tests), <1 sec, no data needed
+pytest                                    # full suite (37 tests), <1 sec, no data needed
 mypy                                      # strict type check, zero dependencies beyond the stdlib types
 python3 tests/test_black_scholes.py       # any test file also runs standalone, no pytest required
 python3 tests/test_greeks_finite_diff.py  # every Greek against a finite difference of the one before it

@@ -84,8 +84,55 @@ def test_js_matches_python_across_random_cases():
         assert rel_err < TOL, f"{field}: worst relative error {rel_err:.2e} exceeds {TOL:.0e}"
 
 
+def _get_js_sessions():
+    """explorer.js's SESSIONS constant (the Solver Explorer's Calendar-mode
+    Session/Expiry dropdowns), pulled straight from the running module
+    rather than re-parsed by hand, so this test breaks the moment the two
+    copies actually diverge instead of only when someone remembers to
+    update both by hand."""
+    JS_RUNNER.write_text(f"""
+const BS = require({json.dumps(str(ROOT / "web" / "explorer.js"))});
+process.stdout.write(JSON.stringify(BS.SESSIONS));
+""")
+    try:
+        result = subprocess.run(["node", str(JS_RUNNER)], capture_output=True, text=True, check=True, timeout=30)
+    finally:
+        JS_RUNNER.unlink(missing_ok=True)
+    return json.loads(result.stdout)
+
+
+def test_sessions_match_committed_market_data():
+    """explorer.js hardcodes each session's date and live expiries (for the
+    Calendar toggle) separately from web/data/market_snapshot*.json, which
+    is where that same data actually comes from -- there's no runtime link
+    between the two, so nothing else would catch them drifting apart if
+    either JSON is ever regenerated with a different date or expiry set.
+    """
+    js_sessions = _get_js_sessions()
+    files = {
+        "2024-12-27": ROOT / "web" / "data" / "market_snapshot.json",
+        "2026-03-11": ROOT / "web" / "data" / "market_snapshot_2026.json",
+    }
+    assert {s["date"] for s in js_sessions} == set(files)
+
+    for session in js_sessions:
+        payload = json.loads(files[session["date"]].read_text())
+        assert payload["snapshot_date"] == session["date"]
+        # any checkpoint has the same live-expiry set; the first one will do
+        first_checkpoint = payload["checkpoints"][0]
+        real_expiries = {e["expiry"] for e in payload["by_time"][first_checkpoint]["expiries"]}
+        js_expiries = {d.replace("-", "") for d in session["expiries"]}
+        assert js_expiries == real_expiries, (
+            f"{session['date']}: explorer.js's SESSIONS has {sorted(js_expiries)}, "
+            f"but market_snapshot data has {sorted(real_expiries)}"
+        )
+
+
 if __name__ == "__main__":
     worst = _worst_relative_errors()
     for field, rel_err in worst.items():
         print(f"  ok  {field:<8} worst relative error {rel_err:.2e}")
     print("\nJS/Python parity confirmed")
+
+    test_sessions_match_committed_market_data()
+    print("explorer.js SESSIONS matches web/data/market_snapshot*.json")

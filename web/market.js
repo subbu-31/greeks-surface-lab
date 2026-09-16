@@ -412,7 +412,11 @@
       return;
     }
     var absRes = rows.map(function(r){return Math.abs(r.residual);}).sort(function(a,b){return a-b;});
-    var median = absRes[Math.floor(absRes.length/2)];
+    var midIdx = Math.floor(absRes.length/2);
+    // True median, not just the upper-middle element -- an even-length
+    // array (common here; strike pairs per checkpoint vary a lot) needs the
+    // average of its two middle values, not one of them picked arbitrarily.
+    var median = absRes.length % 2 ? absRes[midIdx] : (absRes[midIdx-1]+absRes[midIdx])/2;
     var nValid = rows.filter(function(r){return r.valid;}).length;
     var nInvalid = rows.length - nValid;
     summary.innerHTML =
