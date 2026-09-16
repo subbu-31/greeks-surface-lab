@@ -123,6 +123,16 @@
     border:2px solid var(--surface); cursor:pointer;
   }
 
+  .axis-note{ font-size:11.5px; color:var(--text-faint); line-height:1.5; padding-bottom:2px; }
+  .date-field{ display:flex; flex-direction:column; gap:4px; }
+  .date-field label{ font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-faint); }
+  input.date-input, input.time-input, select.time-input{
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+    font-family:inherit; font-size:12.5px; font-weight:500; padding:7px 10px; border-radius:8px;
+    width:100%; box-sizing:border-box; cursor:pointer;
+  }
+  input.date-input:focus-visible, input.time-input:focus-visible, select.time-input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
   .footnote{ font-size:11px; color:var(--text-faint); line-height:1.6; margin-top:auto; padding-top:14px; border-top:1px solid var(--border); }
   .footnote code{ font-family:"IBM Plex Mono",monospace; background:var(--surface-2); padding:1px 4px; border-radius:4px; }
 
@@ -230,6 +240,11 @@
       </div>
 
       <div class="panel">
+        <div class="panel-label">Spot range</div>
+        <div id="spotSlider"></div>
+      </div>
+
+      <div class="panel">
         <div class="panel-label">Surface axes</div>
         <div class="segmented">
           <div class="seg-row"><button class="seg-btn active" data-axes="S_T" style="grid-column:1/-1">Spot &times; Time</button></div>
@@ -258,6 +273,7 @@
       <div class="credit">
         <span>Closed-form Black-Scholes &middot; r = <span class="num" id="rTag"></span></span>
         <span>Grid: 46 &times; 46</span>
+        <span id="calendarTag"></span>
       </div>
     </main>
   </div>

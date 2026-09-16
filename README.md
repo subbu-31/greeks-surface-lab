@@ -103,12 +103,28 @@ parity and an independent JS reimplementation used by the web page.
   `explorer.js` reimplements the same Black-Scholes formulas in JS (kept
   in sync with `black_scholes.py` by hand and checked by
   `tests/test_js_parity.py`, since a static page can't call Python at
-  runtime); `market.js` reads the prebuilt JSON and drives every chart on
-  the Real NIFTY Snapshot tab off three linked controls -- **Session**,
-  **Hour**, and **Expiry** -- so picking a different hour re-renders the
-  IV smile, term structure/skew, IV surface, per-strike Greeks, put-call
-  parity, and traded volume together, all against that hour's own real
-  prints, not a separate fixed-contract side panel.
+  runtime). On the Solver Explorer tab, "time to expiry" -- whenever it's a
+  fixed parameter rather than the surface's own axis (Spot × Strike, Spot ×
+  Volatility) -- can be set two ways via a **Days / Calendar** toggle: a
+  plain days slider, or the real dashboard's own **Session**, **Entry
+  hour**, and **Expiry** choices (the same two sessions, seven hourly
+  checkpoints, and each session's own live expiries), not a free-form
+  date/minute picker -- this solver has no live or intra-checkpoint feed
+  behind it, so offering arbitrary dates or minute-level entry times would
+  imply a precision that doesn't exist. Expiry is marked at 15:30 local
+  (matching `bs_solver.rates`' convention), and defaults to the same
+  2024-12-27 09:15 -> 2025-01-09 session the Real NIFTY Snapshot tab's
+  primary data comes from, so "13.26 days" means the same thing on both
+  tabs. Switching Session resets Expiry to that session's own first live
+  expiry, the same reconciliation `market.js` does. A combination outside
+  the explorer's declared 1-180d range is clamped, not silently misused,
+  and the clamp is shown, not hidden. `market.js` reads
+  the prebuilt JSON and drives every chart on the Real NIFTY Snapshot tab
+  off three linked controls -- **Session**, **Hour**, and **Expiry** -- so
+  picking a different hour re-renders the IV smile, term structure/skew,
+  IV surface, per-strike Greeks, put-call parity, and traded volume
+  together, all against that hour's own real prints, not a separate
+  fixed-contract side panel.
 
 ## Installing
 

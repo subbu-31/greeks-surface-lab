@@ -72,7 +72,32 @@
     S_V: {x:"Spot", y:"Implied vol (%)"}
   };
 
-  var state = { qty:"price", side:"CE", axes:"S_T", S0:24500, K:24500, Tdays:30, sigma:14, r:6.5 };
+  // Calendar mode reuses the real dashboard's own two sessions and seven
+  // hourly checkpoints, rather than a free-form date/time picker -- this
+  // solver has no live or minute-level feed behind it (nothing here
+  // "updates" between checkpoints), so offering minute-by-minute entry
+  // times or arbitrary dates would imply a precision that doesn't exist.
+  // Expiries are each session's own real live expiries (build_market_snapshot.py).
+  var SESSIONS = [
+    { date:"2024-12-27", label:"2024-12-27", expiries:["2025-01-02","2025-01-09","2025-01-16","2025-01-23"] },
+    { date:"2026-03-11", label:"2026-03-11 (Thu→Tue expiry day)", expiries:["2026-03-17","2026-03-24","2026-03-30","2026-04-07"] }
+  ];
+  var ENTRY_HOURS = ["09:15","10:15","11:15","12:15","13:15","14:15","15:15"];
+
+  function sessionFor(date){
+    return SESSIONS.filter(function(s){ return s.date === date; })[0] || SESSIONS[0];
+  }
+  function fmtIsoDMY(iso){ var p = iso.split("-"); return p[2]+"-"+p[1]+"-"+p[0]; }
+
+  var state = {
+    qty:"price", side:"CE", axes:"S_T", S0:24500, K:24500, Tdays:30, sigma:14, r:6.5,
+    // "Time to expiry" can be set two ways: a plain days slider, or the same
+    // session/hour/expiry the real NIFTY dashboard uses (bs_solver.rates'
+    // years_to_expiry marks expiry at 15:30 local) -- defaults match that
+    // dashboard's own unified session, so the two tabs agree on what
+    // "13.26 days" actually means.
+    dateMode:"days", entryDate:SESSIONS[0].date, entryTime:"09:15", expiryDate:"2025-01-09"
+  };
 
   var root = document.documentElement;
   function cssVar(name){ return getComputedStyle(root).getPropertyValue(name).trim(); }
@@ -112,16 +137,56 @@
   });
 
   var SLIDER_DEFS = {
+    S0:    {label:"Spot (center)",         min:15000, max:35000, step:50,  fmt:function(v){return "₹"+v.toLocaleString("en-IN");}},
     K:     {label:"Strike (K)",           min:20000, max:29000, step:50,  fmt:function(v){return "₹"+v.toLocaleString("en-IN");}},
     Tdays: {label:"Time to expiry",       min:1,     max:180,   step:1,   fmt:function(v){return v+" d";}},
     sigma: {label:"Implied volatility",   min:5,     max:60,    step:0.5, fmt:function(v){return v.toFixed(1)+"%";}},
     r:     {label:"Risk-free rate",       min:0,     max:12,    step:0.25,fmt:function(v){return v.toFixed(2)+"%";}}
   };
   var SLIDERS_FOR_AXES = { S_T:["K","sigma","r"], S_K:["Tdays","sigma","r"], S_V:["K","Tdays","r"] };
+
+  // Spot is always a plotted axis, not a fixed parameter, so its slider
+  // lives in its own always-visible panel (spotSlider) rather than the
+  // axis-dependent "Fixed parameters" list built by buildSliders() below --
+  // it sets where that axis's visible 0.7x-1.3x window is centered, same
+  // meaning in all three axis modes.
+  function buildSpotSlider(){
+    var def = SLIDER_DEFS.S0;
+    var box = document.getElementById("spotSlider");
+    var row = document.createElement("div");
+    row.className = "slider-row";
+    row.innerHTML =
+      '<div class="slider-head"><span class="name">'+def.label+'</span><span class="val num" id="val_S0">'+def.fmt(state.S0)+'</span></div>'+
+      '<input type="range" id="sl_S0" min="'+def.min+'" max="'+def.max+'" step="'+def.step+'" value="'+state.S0+'">';
+    box.appendChild(row);
+    var input = row.querySelector("input");
+    input.addEventListener("input", function(){
+      state.S0 = parseFloat(input.value);
+      document.getElementById("val_S0").textContent = def.fmt(state.S0);
+      render();
+    });
+  }
+
+  // Real days between an entry timestamp and expiry -- expiry marked at
+  // 15:30 local, the same convention bs_solver.rates and the market-data
+  // scripts use, not midnight.
+  function daysBetween(entryDate, entryTime, expiryDate){
+    var entry = new Date(entryDate + "T" + entryTime + ":00");
+    var exp = new Date(expiryDate + "T15:30:00");
+    return (exp.getTime() - entry.getTime()) / 86400000;
+  }
+
   function buildSliders(){
     var box = document.getElementById("sliders");
     box.innerHTML = "";
+    if(state.axes === "S_T"){
+      var note = document.createElement("div");
+      note.className = "axis-note";
+      note.textContent = "Time to expiry is this surface's own axis (1-180d) here -- switch to Spot × Strike or Spot × Volatility to fix it instead, with a Days/Calendar toggle.";
+      box.appendChild(note);
+    }
     SLIDERS_FOR_AXES[state.axes].forEach(function(key){
+      if(key === "Tdays"){ box.appendChild(buildTdaysControl()); return; }
       var def = SLIDER_DEFS[key];
       var row = document.createElement("div");
       row.className = "slider-row";
@@ -136,6 +201,111 @@
         render();
       });
     });
+  }
+
+  function buildTdaysControl(){
+    var def = SLIDER_DEFS.Tdays;
+    var wrap = document.createElement("div");
+    wrap.className = "slider-row";
+
+    var toggle = document.createElement("div");
+    toggle.className = "seg-row";
+    toggle.style.marginBottom = "8px";
+    [["days","Days"],["calendar","Calendar"]].forEach(function(pair){
+      var b = document.createElement("button");
+      b.className = "seg-btn" + (state.dateMode===pair[0] ? " active" : "");
+      b.textContent = pair[1];
+      b.addEventListener("click", function(){
+        if(state.dateMode === pair[0]) return;
+        state.dateMode = pair[0];
+        buildSliders();
+        render();
+      });
+      toggle.appendChild(b);
+    });
+    wrap.appendChild(toggle);
+
+    if(state.dateMode === "days"){
+      var head = document.createElement("div");
+      head.className = "slider-head";
+      head.innerHTML = '<span class="name">'+def.label+'</span><span class="val num" id="val_Tdays">'+def.fmt(state.Tdays)+'</span>';
+      wrap.appendChild(head);
+      var input = document.createElement("input");
+      input.type = "range"; input.id = "sl_Tdays";
+      input.min = String(def.min); input.max = String(def.max); input.step = String(def.step);
+      input.value = String(state.Tdays);
+      input.addEventListener("input", function(){
+        state.Tdays = parseFloat(input.value);
+        document.getElementById("val_Tdays").textContent = def.fmt(state.Tdays);
+        render();
+      });
+      wrap.appendChild(input);
+      return wrap;
+    }
+
+    // Calendar mode: Session and Expiry are each session's own real live
+    // expiries (build_market_snapshot.py), and Entry time is the same
+    // seven hourly checkpoints the real dashboard exposes -- not a
+    // free-form date/minute picker. Nothing behind this solver updates
+    // between those checkpoints, so a finer picker would only imply a
+    // precision this synthetic surface doesn't have.
+    function selectField(labelText, options, value, onChange){
+      var f = document.createElement("div");
+      f.className = "date-field";
+      var lab = document.createElement("label");
+      lab.textContent = labelText;
+      var sel = document.createElement("select");
+      sel.className = "time-input";
+      options.forEach(function(opt){
+        var o = document.createElement("option");
+        o.value = opt.value; o.textContent = opt.label;
+        if(opt.value === value) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", onChange);
+      f.appendChild(lab); f.appendChild(sel);
+      return f;
+    }
+
+    var computed = document.createElement("div");
+    computed.className = "slider-head";
+    computed.style.marginTop = "2px";
+
+    function refreshComputed(){
+      var raw = daysBetween(state.entryDate, state.entryTime, state.expiryDate);
+      state.Tdays = Math.min(Math.max(raw, def.min), def.max);
+      var note = Math.abs(raw - state.Tdays) > 0.005
+        ? ' <span style="color:var(--bad)">(clamped to '+def.min+'-'+def.max+'d)</span>' : "";
+      computed.innerHTML = '<span class="name">Time to expiry</span><span class="val num">'+raw.toFixed(2)+' d'+note+'</span>';
+      render();
+    }
+
+    var session = sessionFor(state.entryDate);
+
+    wrap.appendChild(selectField("Session",
+      SESSIONS.map(function(s){ return {value:s.date, label:s.label}; }),
+      state.entryDate, function(e){
+        state.entryDate = e.target.value;
+        state.expiryDate = sessionFor(state.entryDate).expiries[0]; // reconcile, same as the market dashboard's Session -> Expiry reset
+        buildSliders();
+        render();
+      }));
+
+    wrap.appendChild(selectField("Entry hour",
+      ENTRY_HOURS.map(function(h){ return {value:h, label:h+" IST"}; }),
+      state.entryTime, function(e){
+        state.entryTime = e.target.value; refreshComputed();
+      }));
+
+    wrap.appendChild(selectField("Expiry",
+      session.expiries.map(function(d){ return {value:d, label:fmtIsoDMY(d)}; }),
+      state.expiryDate, function(e){
+        state.expiryDate = e.target.value; refreshComputed();
+      }));
+
+    wrap.appendChild(computed);
+    refreshComputed();
+    return wrap;
   }
 
   function computeGrid(){
@@ -198,6 +368,10 @@
     document.getElementById("titleLine").style.setProperty("--qty-color","var("+qDef.color+")");
     document.getElementById("axisLine").textContent = ax.x + " × " + ax.y;
     document.getElementById("rTag").textContent = state.r.toFixed(2)+"%";
+    document.getElementById("calendarTag").textContent =
+      (state.axes !== "S_T" && state.dateMode === "calendar")
+        ? state.entryDate+" "+state.entryTime+" → "+state.expiryDate
+        : "";
 
     var flat = [].concat.apply([], g.z);
     var atS = Math.round((g.x.length-1)/2);
@@ -211,7 +385,7 @@
       {k:"at-the-money value", v: qDef.fmt(atVal), cls: atVal<0?"neg":(atVal>0?"pos":"")},
       {k:"surface min", v: qDef.fmt(minV)},
       {k:"surface max", v: qDef.fmt(maxV)},
-      {k:"spot (fixed at)", v: "₹"+state.S0.toLocaleString("en-IN")}
+      {k:"spot range centered at", v: "₹"+state.S0.toLocaleString("en-IN")}
     ].forEach(function(s){
       var d = document.createElement("div");
       d.className = "stat";
@@ -245,6 +419,7 @@
     Plotly.react("surface", data, layout, {displayModeBar:false, responsive:true});
   }
 
+  buildSpotSlider();
   buildSliders();
   render();
   window.addEventListener("resize", function(){
